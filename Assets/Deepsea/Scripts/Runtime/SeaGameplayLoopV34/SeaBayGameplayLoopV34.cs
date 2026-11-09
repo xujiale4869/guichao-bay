@@ -45,6 +45,7 @@ namespace Deepsea {
    SpawnWorkshops(houses);
    InitializeWaterActivities();
    game.SetWatchLightingV34(State.watch);
+   SeaSunnyHarborAudioV36.Attach(game);
   }
 
   // The player file commits the action first. The bay stores the receipt revision
@@ -187,7 +188,10 @@ namespace Deepsea {
    var ids=new HashSet<string>(fish.Select(f=>f.id));
    int day=Today;
    if(Commit(s=>{s.fish.RemoveAll(f=>ids.Contains(f.id));s.gameplayV34.crabs--;s.gameplayV34.bountyDay=day;s.coins+=120;},
-       new BayTransferV34{brass=3}))Report("悬赏已交付 · 金币 +120 · 黄铜 +3");
+       new BayTransferV34{brass=3})){
+    SeaSunnyHarborAudioV36.PlayHarvest(game,SeaSunnyHarborAudioV36.Harvest.Bounty);
+    Report("悬赏已交付 · 金币 +120 · 黄铜 +3");
+   }
   }
   void Breed(){
    if(game.save.coins<30){Report("金币不足，需要 30。");return;}

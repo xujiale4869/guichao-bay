@@ -1,0 +1,11 @@
+﻿{
+    "loadedBuildings":  19,
+    "bakedFlourish":  true,
+    "assemblySHA256":  "BA9270C3A41A5C274A8A8ECC93706CF495183CFA5FE045ECBDCD20B99FD7FE5A",
+    "passed":  true,
+    "executableSHA256":  "059C313352892718258A120B87BDC6FC7C23CE67181084ABE14F86F204F5DDDB",
+    "pid":  25164,
+    "bakedStems":  true,
+    "savedBuiltTanks":  1,
+    "savesUnchanged":  10
+}

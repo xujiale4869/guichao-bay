@@ -215,6 +215,7 @@ namespace Deepsea {
     state.pots.Add(new PotHarvestV34{x=pot.gridX,z=pot.gridZ,placedUtc=pot.placedUtcV34,harvestedUtc=now});
     state.crabs++;state.bait++;s.coins+=18;
    },new BayTransferV34{wood=1})){
+    SeaSunnyHarborAudioV36.PlayHarvest(game,SeaSunnyHarborAudioV36.Harvest.CrabPot);
     RefreshPotMarkers();game.Cue(true);Report("起笼 · 肥蟹 +1 · 蟹饵 +1 · 金币 +18 · 浮木 +1");
    }
    return true;
@@ -258,6 +259,7 @@ namespace Deepsea {
    long respawn=Now+TimeSpan.TicksPerSecond*UnityEngine.Random.Range(36,61);
    if(Commit(s=>{s.coins+=coins;s.gameplayV34.bait+=bait;s.gameplayV34.floatRespawn[f.slot]=respawn;},reward)){
     floats[f.slot]=null;Destroy(f.model.gameObject);game.Cue(true);
+    SeaSunnyHarborAudioV36.PlayHarvest(game,SeaSunnyHarborAudioV36.Harvest.Salvage);
     Report(SalvageNames[f.kind]+" · "+goods+" · 金币 +"+coins);
    }else f.model.position=f.position;
    towing=null;grab.gameObject.SetActive(false);tow.enabled=false;

@@ -61,6 +61,7 @@ namespace Deepsea {
      if(s.gameplayV34.bait>0)s.gameplayV34.bait--;
     }))return false;
    }else{save.fish.Add(fish);SaveNow();}
+   SeaSunnyHarborAudioV36.PlayHarvest(this,SeaSunnyHarborAudioV36.Harvest.Fish);
    CancelActivity();RefreshCollection();Notify("已收进活鱼箱："+name+"。可以回馆放入展缸。");return true;
   }
   public void ReleaseCatch(){if(fishingStage!=5)return;CancelActivity();Cue(true);Notify("鱼已放流，随身收藏不变。");}

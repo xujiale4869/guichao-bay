@@ -1,0 +1,20 @@
+{
+    "waterShader": "Deepsea/SeaSurfaceSparkleHarborV27",
+    "bakedStems": false,
+    "bakedFlourish": false,
+    "sampleRate": 44100,
+    "loopSamples": 846720,
+    "stemDriftSamples": 0,
+    "dayRms": 0.10896860063076019,
+    "villageRms": 0.13035234808921815,
+    "nightRms": 0.07200027257204056,
+    "cueRms": 0.08930234611034394,
+    "reelGain": 0.0,
+    "reelNightGain": 0.0,
+    "reelRms": 0.0,
+    "reelEntrySeconds": 0.0,
+    "fish": 0,
+    "salvage": 0,
+    "crabPot": 0,
+    "bounty": 0
+}

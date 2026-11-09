@@ -71,7 +71,7 @@ namespace Deepsea {
    yield return new WaitForSeconds(1.9f);
    Check(game.fishingStage==3&&game.PendingFishName=="月光水母"&&g.ReviewSchool(0),"v34 lit bite after .8 second soak with rare jellyfish");
    if(game.fishingStage==3){
-    game.Interact();
+    if(SeaSunnyHarborAudioV36.Enabled)yield return ReviewReelingAudioV36();else game.Interact();
     float until=Time.time+15;
     while(game.fishingStage==4&&Time.time<until){game.AutoReel=game.tension<48;yield return null;}
     Check(game.fishingStage==5,"v34 real reeling can land a rare fish");
@@ -79,6 +79,7 @@ namespace Deepsea {
      yield return Capture("v34-night-catch");
      Check(game.KeepCatch()&&game.save.fish.Any(f=>f.tank<0&&f.variantV34==1)&&g.State.bait==2,
          "v34 retained rare catch and bait debit persisted together");
+     if(SeaSunnyHarborAudioV36.Enabled)yield return ReviewHarvestCueV36();
     }
    }
    game.CancelActivity();
