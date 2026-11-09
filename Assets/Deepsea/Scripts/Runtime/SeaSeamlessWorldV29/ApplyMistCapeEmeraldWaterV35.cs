@@ -10,6 +10,7 @@ namespace Deepsea
     {
         internal const string ShaderName = "Deepsea/MistCapeEmeraldWaterV35";
         internal const string PhysicalShaderName = "Deepsea/MistCapePhysicalWaterV351";
+        internal const string OrganicShaderName = "Deepsea/MistCapeOrganicWaterV352";
         const int MaxContacts = 16;
         static readonly int ContactsId = Shader.PropertyToID("_MistCapeContactsV35");
         static readonly int ContactCountId = Shader.PropertyToID("_MistCapeContactCountV35");
@@ -41,12 +42,25 @@ namespace Deepsea
             }
         }
 
+        internal static bool OrganicEnabled
+        {
+            get
+            {
+#if DEEPSEA_V35_2
+                return true;
+#else
+                return false;
+#endif
+            }
+        }
+
         SeaLifeRuntime game;
         Renderer waterRenderer;
         SeaLifeNavigationV23 navigation;
         bool physicalWake;
         internal Shader HarborBaseline { get; private set; }
         internal Shader PreviousEmerald { get; private set; }
+        internal Shader PreviousPhysical { get; private set; }
         internal bool PhysicalWake => physicalWake;
         internal Shader Emerald { get; private set; }
         internal int ContactCount { get; private set; }
@@ -80,10 +94,24 @@ namespace Deepsea
                 Shader.SetGlobalFloat("_MistCapeMeanWaterV351", SeaLifeRuntime.Sea);
             }
 
+            Shader previousPhysical = null;
+            if (OrganicEnabled)
+            {
+                var organic = Resources.Load<Material>("SeaMistCapeV35_2/OrganicShaderKeep");
+                if (organic == null || organic.shader.name != OrganicShaderName || !organic.shader.isSupported)
+                {
+                    Debug.LogError("MIST_CAPE_V352_SHADER_UNAVAILABLE");
+                    return activeShader;
+                }
+                previousPhysical = activeShader;
+                activeShader = organic.shader;
+            }
+
             var water = game.gameObject.AddComponent<ApplyMistCapeEmeraldWaterV35>();
             water.game = game;
             water.HarborBaseline = harborBaseline;
             water.PreviousEmerald = kept.shader;
+            water.PreviousPhysical = previousPhysical;
             water.Emerald = activeShader;
             if (PhysicalEnabled)
             {
@@ -92,7 +120,7 @@ namespace Deepsea
             }
             water.PublishPierContacts();
             water.PublishFrame();
-            string marker = PhysicalEnabled ? "MIST_CAPE_V351_READY" : "MIST_CAPE_V35_READY";
+            string marker = OrganicEnabled ? "MIST_CAPE_V352_READY" : PhysicalEnabled ? "MIST_CAPE_V351_READY" : "MIST_CAPE_V35_READY";
             Debug.Log(marker + " surface=ShowcaseWater contacts=" + water.ContactCount);
             return water.Emerald;
         }
@@ -103,7 +131,8 @@ namespace Deepsea
             PublishFrame();
             if (navigation != null)
             {
-                bool active = waterRenderer.sharedMaterial.shader == Emerald;
+                Shader selected = waterRenderer.sharedMaterial.shader;
+                bool active = selected == Emerald || selected == PreviousPhysical;
                 if (active != physicalWake)
                 {
                     navigation.SetPhysicalWakeV351(active);
