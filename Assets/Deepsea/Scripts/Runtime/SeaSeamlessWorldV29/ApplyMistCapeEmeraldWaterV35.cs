@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace Deepsea
 {
@@ -8,6 +9,7 @@ namespace Deepsea
     public sealed class ApplyMistCapeEmeraldWaterV35 : MonoBehaviour
     {
         internal const string ShaderName = "Deepsea/MistCapeEmeraldWaterV35";
+        internal const string PhysicalShaderName = "Deepsea/MistCapePhysicalWaterV351";
         const int MaxContacts = 16;
         static readonly int ContactsId = Shader.PropertyToID("_MistCapeContactsV35");
         static readonly int ContactCountId = Shader.PropertyToID("_MistCapeContactCountV35");
@@ -27,8 +29,25 @@ namespace Deepsea
             }
         }
 
+        internal static bool PhysicalEnabled
+        {
+            get
+            {
+#if DEEPSEA_V35_1
+                return true;
+#else
+                return false;
+#endif
+            }
+        }
+
         SeaLifeRuntime game;
+        Renderer waterRenderer;
+        SeaLifeNavigationV23 navigation;
+        bool physicalWake;
         internal Shader HarborBaseline { get; private set; }
+        internal Shader PreviousEmerald { get; private set; }
+        internal bool PhysicalWake => physicalWake;
         internal Shader Emerald { get; private set; }
         internal int ContactCount { get; private set; }
         internal float WakeSpeed { get; private set; }
@@ -45,19 +64,52 @@ namespace Deepsea
                 return harborBaseline;
             }
 
+            Shader activeShader = kept.shader;
+            if (PhysicalEnabled)
+            {
+                var physical = Resources.Load<Material>("SeaMistCapeV35_1/PhysicalShaderKeep");
+                if (physical == null || physical.shader.name != PhysicalShaderName || !physical.shader.isSupported)
+                {
+                    Debug.LogError("MIST_CAPE_V351_SHADER_UNAVAILABLE");
+                    return activeShader;
+                }
+                activeShader = physical.shader;
+                var cameraData = game.view.GetUniversalAdditionalCameraData();
+                cameraData.requiresDepthTexture = true;
+                cameraData.requiresColorTexture = true;
+                Shader.SetGlobalFloat("_MistCapeMeanWaterV351", SeaLifeRuntime.Sea);
+            }
+
             var water = game.gameObject.AddComponent<ApplyMistCapeEmeraldWaterV35>();
             water.game = game;
             water.HarborBaseline = harborBaseline;
-            water.Emerald = kept.shader;
+            water.PreviousEmerald = kept.shader;
+            water.Emerald = activeShader;
+            if (PhysicalEnabled)
+            {
+                water.waterRenderer = game.world.Find("ShowcaseWater").GetComponent<Renderer>();
+                water.navigation = game.GetComponent<SeaLifeNavigationV23>();
+            }
             water.PublishPierContacts();
             water.PublishFrame();
-            Debug.Log("MIST_CAPE_V35_READY surface=ShowcaseWater contacts=" + water.ContactCount);
+            string marker = PhysicalEnabled ? "MIST_CAPE_V351_READY" : "MIST_CAPE_V35_READY";
+            Debug.Log(marker + " surface=ShowcaseWater contacts=" + water.ContactCount);
             return water.Emerald;
         }
 
         void LateUpdate()
         {
-            if (game != null) PublishFrame();
+            if (game == null) return;
+            PublishFrame();
+            if (navigation != null)
+            {
+                bool active = waterRenderer.sharedMaterial.shader == Emerald;
+                if (active != physicalWake)
+                {
+                    navigation.SetPhysicalWakeV351(active);
+                    physicalWake = active;
+                }
+            }
         }
 
         void PublishFrame()
@@ -157,7 +209,16 @@ namespace Deepsea
 
         void OnDestroy()
         {
+            if (physicalWake && navigation != null) navigation.SetPhysicalWakeV351(false);
             Shader.SetGlobalInt(ContactCountId, 0);
+        }
+    }
+
+    public sealed partial class SeaLifeNavigationV23
+    {
+        internal void SetPhysicalWakeV351(bool active)
+        {
+            if (wakeMaterial != null) wakeMaterial.SetFloat("_MistCapeWakeBreakupV351", active ? 1 : 0);
         }
     }
 }

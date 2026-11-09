@@ -2,6 +2,7 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace Deepsea
 {
@@ -24,9 +25,20 @@ namespace Deepsea
             var water = game.GetComponent<ApplyMistCapeEmeraldWaterV35>();
             var renderer = waterFilter.GetComponent<Renderer>();
             var material = renderer.sharedMaterial;
-            Check(water != null && material.shader.name == ApplyMistCapeEmeraldWaterV35.ShaderName,
+            bool physical = ApplyMistCapeEmeraldWaterV35.PhysicalEnabled;
+            string prefix = physical ? "v351-" : "v35-";
+            string expected = physical ? ApplyMistCapeEmeraldWaterV35.PhysicalShaderName : ApplyMistCapeEmeraldWaterV35.ShaderName;
+            Check(water != null && material.shader.name == expected,
                 "v35 shader active on the actual ShowcaseWater surface");
             if (water == null) yield break;
+            if (physical)
+            {
+                var cameraData = game.view.GetUniversalAdditionalCameraData();
+                Check(cameraData.requiresDepthTexture && cameraData.requiresColorTexture,
+                    "v35.1 real sailing camera supplies depth and opaque colour");
+                Check(water.PreviousEmerald.name == ApplyMistCapeEmeraldWaterV35.ShaderName && water.PhysicalWake,
+                    "v35.1 historical wake uses physical foam while v35 comparison remains available");
+            }
 
             Check(game.world.GetComponentsInChildren<Renderer>(true).Count(r => r.sharedMaterials.Any(m => m != null && m.shader == water.Emerald)) == 1,
                 "v35 shader binds to one surface and leaves other renderers alone");
@@ -45,10 +57,11 @@ namespace Deepsea
 
             // Both images use the same boat, geometry, camera, lighting and water phase.
             Time.timeScale = 0;
-            material.shader = water.HarborBaseline;
-            yield return Capture("v35-same-view-v34");
+            var comparison = physical ? water.PreviousEmerald : water.HarborBaseline;
+            material.shader = comparison;
+            yield return Capture(prefix + (physical ? "same-view-v35" : "same-view-v34"));
             material.shader = water.Emerald;
-            yield return Capture("v35-preview");
+            yield return Capture(prefix + "preview");
             Check(Quaternion.Angle(game.view.transform.rotation, Quaternion.Euler(45, -18, 0)) < .05f,
                 "v35 comparison uses the 45 degree perspective sailing view");
             Time.timeScale = 1;
@@ -58,7 +71,19 @@ namespace Deepsea
             game.DriveInput = Vector2.up;
             yield return new WaitForSeconds(1.38f);
             Check(water.WakeSpeed > 1.1f && game.Speed > 1.1f, "v35 directional wake uses real propulsion speed");
-            yield return Capture("v35-emerald-water-closeup");
+            if (physical)
+            {
+                game.SetWaterReviewAngleV35(Quaternion.Euler(45,-18,0),customSailZoom);
+                Time.timeScale = 0;
+                material.shader = comparison;
+                yield return Capture(prefix + "same-closeup-v35");
+                Check(!water.PhysicalWake, "v35.1 comparison restores v35 historical wake rendering");
+                material.shader = water.Emerald;
+                yield return Capture(prefix + "emerald-water-closeup");
+                Check(water.PhysicalWake, "v35.1 local wash and historical foam resume together");
+                Time.timeScale = 1;
+            }
+            else yield return Capture(prefix + "emerald-water-closeup");
             game.DriveInput = Vector2.zero;
             yield return new WaitForSeconds(.40f);
             game.PlaceBoat(new Vector3(9.2f, SeaLifeRuntime.Sea, 5.65f), 255);
@@ -71,12 +96,12 @@ namespace Deepsea
             yield return new WaitForSeconds(.5f);
             Check(game.save.gameplayV34.watch == 3 && Shader.GetGlobalFloat("_MistCapeWatchV35") == 3 &&
                 renderer.sharedMaterial.shader == water.Emerald, "v35 water follows the real v34 night watch");
-            yield return Capture("v35-night");
+            yield return Capture(prefix + "night");
             game.GameplayV34.CycleWatch();
             game.GameplayV34.CycleWatch();
             Check(game.save.gameplayV34.watch == 1, "v35 review restores noon");
 
-            File.WriteAllText(Path.Combine(evidence, "water-v35.json"),
+            File.WriteAllText(Path.Combine(evidence, physical ? "water-v351.json" : "water-v35.json"),
                 "{\"activeShader\":\""+material.shader.name+"\",\"pierWaterlineContacts\":"+water.ContactCount+
                 ",\"pitch\":45,\"yaw\":-18,\"sameViewFrozenPhase\":true}");
             game.SetWaterReviewAngleV35(oldAngle);
