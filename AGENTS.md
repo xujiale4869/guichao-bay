@@ -1,6 +1,6 @@
 # 深海灯塔当前工程
 
-当前最新版为 v33。新增海岬混交林、野花蕨草、渔村陈设和水下伴生礁群。沿用 v30 界面、v32 建筑与既有存档。见 Docs/SeaLushV33/README.md，程序 Builds/SeaLushV33/Guichao-SeaLushV33.exe。
+当前最新版为 v34。新增漂流物打捞、提灯夜钓、捕蟹笼收益和渔村工坊，沿用 v30 航海界面。首次导入 v33 进度后使用 v34 独立存档。见 Docs/SeaGameplayV34/README.md，程序 Builds/SeaGameplayV34/Guichao-SeaGameplayV34.exe。
 
 历史海岸美术版本：v11，2026-10-23 完成独立程序验收。主要分析与制作记录在 `C:/Users/许嘉乐/Documents/ChatGPT/深海灯塔/art-v11/reference-analysis.md`，项目内副本见 `Docs/原图对照与美术推进-v11.md`。
 

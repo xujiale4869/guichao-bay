@@ -7,8 +7,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 namespace Deepsea {
  public enum BayBuildableType { WoodenPierDeck, PierLanternPost, CoralReefGarden, CrabPotBuoy }
- [Serializable] public sealed class BayPlacedBuildingEntry { public int gridX,gridZ,buildType,rotationStep; }
+ [Serializable] public sealed class BayPlacedBuildingEntry { public int gridX,gridZ,buildType,rotationStep; public long placedUtcV34; }
  [Serializable] public sealed class BayExpansionSaveData {
+  public long appliedGameplayV34;
   public int version=28,wood=24,stone=16,coralSeed=12,brass=8;
   public List<BayPlacedBuildingEntry> placedBuildings=new List<BayPlacedBuildingEntry>();
  }
@@ -19,7 +20,7 @@ namespace Deepsea {
   public static bool Checking {get{return SeaSeamlessWorldAndNauticalUIV29.Checking||Environment.GetCommandLineArgs().Contains("-bay-v28-check");}}
   static readonly string TestId=DateTime.UtcNow.Ticks.ToString();
   public static bool CapturesInput {get{return Active!=null&&Active.Ready&&(Active.godBuildMode||((Input.GetKeyDown(KeyCode.G)||(SeaSeamlessWorldAndNauticalUIV29.SceneEnabled&&Input.GetKeyDown(KeyCode.B)))&&Active.CanEnter));}}
-  public static string PlayerSavePath(bool oldReview){return SeaSeamlessWorldAndNauticalUIV29.Checking?SeaSeamlessWorldAndNauticalUIV29.TestPlayerPath:Checking?Path.Combine(Application.temporaryCachePath,"bay-v28-player-"+TestId+".json"):oldReview?Path.Combine(Application.temporaryCachePath,"sea-life-review-v21.json"):Path.Combine(Application.persistentDataPath,"sea-life-v21.json");}
+  public static string PlayerSavePath(bool oldReview){return SeaSeamlessWorldAndNauticalUIV29.Checking?SeaSeamlessWorldAndNauticalUIV29.TestPlayerPath:Checking?Path.Combine(Application.temporaryCachePath,"bay-v28-player-"+TestId+".json"):oldReview?Path.Combine(Application.temporaryCachePath,"sea-life-review-v21.json"):SeaBayGameplayLoopV34.Enabled?GameplayProfileV34.Import("sea-life-v34.json","sea-life-v21.json",true):Path.Combine(Application.persistentDataPath,"sea-life-v21.json");}
   public static bool ValidBoatPosition(float x,float z){return !float.IsNaN(x)&&!float.IsNaN(z)&&(SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?x>=-22&&x<=128&&z>=-88&&z<=108:SceneEnabled?x>=-10&&x<=86&&z>=-50&&z<=66:x>-5&&x<35&&z>-22&&z<32);}
   public static Vector3 SavedBoatPosition(Vector3 p){if(SceneEnabled){p.x=Mathf.Clamp(p.x,SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?-22:-10,SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?128:86);p.z=Mathf.Clamp(p.z,SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?-88:-50,SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?108:66);}return p;}
   public static void ClampBoat(Rigidbody body){var p=body.position;float minX=SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?-22:SceneEnabled?-10:-6,maxX=SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?128:SceneEnabled?86:34,minZ=SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?-88:SceneEnabled?-50:-23,maxZ=SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?108:SceneEnabled?66:32;if(p.x<minX||p.x>maxX||p.z<minZ||p.z>maxZ){p.x=Mathf.Clamp(p.x,minX,maxX);p.z=Mathf.Clamp(p.z,minZ,maxZ);body.position=p;body.velocity*=.5f;}}
@@ -38,7 +39,7 @@ namespace Deepsea {
   MeshFilter waterFilter;Mesh oldWaterMesh;Vector3 oldWaterScale,oldWaterPosition;
   readonly RaycastHit[] hits=new RaycastHit[64];readonly Collider[] overlap=new Collider[64];Collider[] terrainColliders;
   Mesh[] models=new Mesh[4];GameObject[] cursorTemplates=new GameObject[4];
-  bool CanEnter {get{return game!=null&&!game.InRoom&&!game.Paused&&!game.Busy&&game.Panel==0;}}
+  bool CanEnter {get{return game!=null&&!game.InRoom&&!game.Paused&&!game.Busy&&!game.WorkshopOpenV34&&game.Panel==0;}}
   [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
   static void Bootstrap(){if(!SceneEnabled||FindObjectOfType<SeaBayExpansionAndBuildSpaceV28>()!=null)return;var rt=FindObjectOfType<SeaLifeRuntime>();if(rt!=null)rt.gameObject.AddComponent<SeaBayExpansionAndBuildSpaceV28>();}
   void Awake(){Active=this;savePath=SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?SeaSeamlessWorldAndNauticalUIV29.LayoutPath:Path.Combine(Checking?Application.temporaryCachePath:Application.persistentDataPath,Checking?"bay-v28-layout-"+TestId+".json":"sea-bay-expansion-v28.json");}
@@ -115,13 +116,15 @@ namespace Deepsea {
   bool Affordable(int type){return type==0?data.wood>=2:type==1?data.wood>=1&&data.brass>=1:type==2?data.stone>=2&&data.coralSeed>=1:data.wood>=1&&data.stone>=1;}
   void ResourcesDelta(int type,int sign){if(type==0)data.wood+=2*sign;else if(type==1){data.wood+=sign;data.brass+=sign;}else if(type==2){data.stone+=2*sign;data.coralSeed+=sign;}else{data.wood+=sign;data.stone+=sign;}}
   public bool TryPlaceBuildingAt(Vector2Int cell,int buildTypeIndex,int rotStep,bool deductResources){
+   if(!SyncGameplayV34()){Message("建材结算待同步");return false;}
    string reason;if(!CanPlace(cell,buildTypeIndex,rotStep,deductResources,out reason)){Message(reason);return false;}if(!deductResources&&!Checking)return false;
-   var entry=new BayPlacedBuildingEntry{gridX=cell.x,gridZ=cell.y,buildType=buildTypeIndex,rotationStep=((rotStep%4)+4)%4};
+   var entry=new BayPlacedBuildingEntry{gridX=cell.x,gridZ=cell.y,buildType=buildTypeIndex,rotationStep=((rotStep%4)+4)%4,placedUtcV34=SeaBayGameplayLoopV34.Enabled&&buildTypeIndex==3?DateTime.UtcNow.Ticks:0};
    data.placedBuildings.Add(entry);if(deductResources)ResourcesDelta(buildTypeIndex,-1);
    if(!SaveLayout()){data.placedBuildings.Remove(entry);if(deductResources)ResourcesDelta(buildTypeIndex,1);return false;}
    Spawn(entry);Physics.SyncTransforms();Message("已建造 "+Names[buildTypeIndex]);return true;
   }
   public bool TryRemoveBuildingAt(Vector2Int cell,bool refundResources){
+   if(!SyncGameplayV34()){Message("建材结算待同步");return false;}
    GameObject go;if(!saveWritable||!buildings.TryGetValue(cell,out go))return false;var entry=data.placedBuildings.Find(b=>b.gridX==cell.x&&b.gridZ==cell.y);if(entry==null)return false;
    if(game.OnFoot&&Mathf.Abs(game.walker.position.x-go.transform.position.x)<1.5f&&Mathf.Abs(game.walker.position.z-go.transform.position.z)<1.5f){Message("先离开这段栈桥，再拆除");return false;}
    int index=data.placedBuildings.IndexOf(entry);data.placedBuildings.RemoveAt(index);if(refundResources)ResourcesDelta(entry.buildType,1);
@@ -131,6 +134,8 @@ namespace Deepsea {
   void Message(string s){message=s;messageUntil=Time.unscaledTime+4;}
   bool SaveLayout(){if(!saveWritable)return false;try{Directory.CreateDirectory(Path.GetDirectoryName(savePath));string tmp=savePath+".tmp";File.WriteAllText(tmp,JsonUtility.ToJson(data,true));if(File.Exists(savePath))File.Replace(tmp,savePath,savePath+".bak");else File.Move(tmp,savePath);return true;}catch(Exception e){Message("保存失败："+e.Message);Debug.LogWarning("BAY_V28_SAVE_FAILED "+e.Message);return false;}}
   void LoadLayout(){
+   if(SeaBayGameplayLoopV34.Enabled&&!Checking)
+    savePath=GameplayProfileV34.Import("sea-bay-expansion-v34.json","sea-bay-expansion-v31.json");
    if(SeaSeamlessWorldAndNauticalUIV29.SceneEnabled&&!Checking&&!File.Exists(savePath)){var old=Path.Combine(Application.persistentDataPath,SeaSeamlessWorldAndNauticalUIV29.IsV31?"sea-bay-expansion-v30.json":SeaSeamlessWorldAndNauticalUIV29.IsV30?"sea-bay-expansion-v29.json":"sea-bay-expansion-v28.json");if(File.Exists(old))File.Copy(old,savePath,false);}
    if(File.Exists(savePath)){try{string json=File.ReadAllText(savePath);if(!json.TrimStart().StartsWith("{"))throw new InvalidDataException("Not a JSON object");var loaded=JsonUtility.FromJson<BayExpansionSaveData>(json);if(loaded==null||loaded.version!=28||loaded.placedBuildings==null||loaded.placedBuildings.Count>512||loaded.wood<0||loaded.stone<0||loaded.coralSeed<0||loaded.brass<0)throw new InvalidDataException("Invalid bay save");
      data=loaded;var used=new HashSet<Vector2Int>();foreach(var b in data.placedBuildings){var c=new Vector2Int(b.gridX,b.gridZ);if(b.buildType<0||b.buildType>3||!used.Add(c)||b.gridX < (SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?-6:-3)||b.gridX>(SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?62:42)||b.gridZ < (SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?-42:-25)||b.gridZ>(SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?48:30)||b.rotationStep<0||b.rotationStep>3)throw new InvalidDataException("Invalid or duplicate placement");}

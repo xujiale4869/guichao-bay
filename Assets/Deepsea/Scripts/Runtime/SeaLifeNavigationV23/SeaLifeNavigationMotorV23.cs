@@ -27,7 +27,8 @@ namespace Deepsea {
    float thrust=throttle>=0?3.2f*throttle:1.22f*throttle;
    // Opposite input brakes the hull promptly before reverse builds up.
    if(throttle*along<-.05f)thrust=throttle*3.4f;
-   float drag=NavigationResistanceV23.ViscousAcceleration(along,game.body.mass,.58f,4.6f)-along*.40f;
+   float resistanceSpeed=along>0&&throttle>0?along/game.ForwardSpeedV34:along;
+   float drag=NavigationResistanceV23.ViscousAcceleration(resistanceSpeed,game.body.mass,.58f,4.6f)-resistanceSpeed*.40f;
    if(along<0)drag-=along*Mathf.Abs(along)*.24f;
    float lateral=NavigationResistanceV23.ViscousAcceleration(side,game.body.mass,2.2f,1.9f)-side*2.25f;
    game.body.AddForce(forward*(thrust+drag)+right*lateral,ForceMode.Acceleration);

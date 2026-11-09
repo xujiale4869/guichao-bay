@@ -3,13 +3,19 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 namespace Deepsea {
- [Serializable] public sealed class SeaLifeFish {public string id;public int species;public int tank=-1;public string area;}
+ [Serializable] public sealed class SeaLifeFish {public string id;public int species;public int tank=-1;public string area;public int variantV34;}
  [Serializable] public sealed class SeaLifeTank {public bool built,kelp;}
  [Serializable] public sealed class SeaLifeSave {
   public int schema=1,coins=30;public List<SeaLifeFish> fish=new List<SeaLifeFish>();
   public SeaLifeTank[] tanks={new SeaLifeTank(),new SeaLifeTank(),new SeaLifeTank()};
   public bool[] shells=new bool[4];public bool salvaged,shellDisplay,anchorDisplay;public float boatX=.8f,boatZ=5.2f,boatYaw=100;
-  public void Normalize(){if(fish==null)fish=new List<SeaLifeFish>();fish.RemoveAll(f=>f==null||string.IsNullOrEmpty(f.id)||f.species<0||f.species>2||f.tank < -1||f.tank>2);var ids=new HashSet<string>();fish.RemoveAll(f=>!ids.Add(f.id));if(tanks==null||tanks.Length!=3)tanks=new[]{new SeaLifeTank(),new SeaLifeTank(),new SeaLifeTank()};for(int i=0;i<3;i++)if(tanks[i]==null)tanks[i]=new SeaLifeTank();if(shells==null||shells.Length!=4)shells=new bool[4];coins=Math.Max(0,coins);}
+  public SeaGameplayProgressV34 gameplayV34;
+  public void Normalize(){if(fish==null)fish=new List<SeaLifeFish>();fish.RemoveAll(f=>f==null||string.IsNullOrEmpty(f.id)||f.species<0||f.species>2||f.tank < -1||f.tank>2);var ids=new HashSet<string>();fish.RemoveAll(f=>!ids.Add(f.id));if(tanks==null||tanks.Length!=3)tanks=new[]{new SeaLifeTank(),new SeaLifeTank(),new SeaLifeTank()};for(int i=0;i<3;i++)if(tanks[i]==null)tanks[i]=new SeaLifeTank();if(shells==null||shells.Length!=4)shells=new bool[4];coins=Math.Max(0,coins);
+   if(SeaBayGameplayLoopV34.Enabled){
+    if(gameplayV34==null)gameplayV34=new SeaGameplayProgressV34();
+    gameplayV34.Normalize();foreach(var f in fish)f.variantV34=Mathf.Clamp(f.variantV34,0,3);
+   }
+  }
  }
  public sealed class SeaLifeStore {
   public readonly string PathName;public SeaLifeStore(string path){PathName=path;}

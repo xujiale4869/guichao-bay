@@ -18,7 +18,7 @@ namespace Deepsea {
   public static bool Checking{get{return (Environment.GetCommandLineArgs().Contains("-seamless-v29-check")||Environment.GetCommandLineArgs().Contains("-unified-v30-check")||Environment.GetCommandLineArgs().Contains("-village-v31-check"));}}
   static readonly string TestId=DateTime.UtcNow.Ticks.ToString();
   public static string TestPlayerPath{get{return Path.Combine(Application.temporaryCachePath,"seamless-v29-player-"+TestId+".json");}}
-  public static string LayoutPath{get{return Path.Combine(Checking?Application.temporaryCachePath:Application.persistentDataPath,Checking?"seamless-v29-layout-"+TestId+".json":IsV31?"sea-bay-expansion-v31.json":IsV30?"sea-bay-expansion-v30.json":"sea-bay-expansion-v29.json");}}
+  public static string LayoutPath{get{return Path.Combine(Checking?Application.temporaryCachePath:Application.persistentDataPath,Checking?"seamless-v29-layout-"+TestId+".json":SeaBayGameplayLoopV34.Enabled?"sea-bay-expansion-v34.json":IsV31?"sea-bay-expansion-v31.json":IsV30?"sea-bay-expansion-v30.json":"sea-bay-expansion-v29.json");}}
   public bool v29WorldEnabled=true,v29NauticalUIEnabled=true;public float customSailZoom=15.5f;
   public bool Ready{get;private set;}public bool UIReady{get;private set;}
   SeaLifeRuntime game;SeaBayExpansionAndBuildSpaceV28 bay;Transform worldRoot;NativeBayHeightfieldV29 native;
@@ -32,10 +32,15 @@ namespace Deepsea {
   IEnumerator Start(){if(!SceneEnabled){enabled=false;yield break;}game=GetComponent<SeaLifeRuntime>();bay=GetComponent<SeaBayExpansionAndBuildSpaceV28>();while(!game.Ready||bay==null||!bay.Ready)yield return null;
    BuildNauticalUI();UIReady=true;game.ui.ApplyNauticalV29();Ready=true;
    lampRoot=game.boat.GetComponentsInChildren<Transform>(true).FirstOrDefault(t=>t.name=="V27_BoatSternLanternPivot");if(lampRoot!=null){lampCore=lampRoot.GetComponentsInChildren<Renderer>(true).FirstOrDefault(r=>r.name=="V27_LanternWarmCore");lampLight=lampRoot.GetComponentInChildren<Light>(true);}
+   if(SeaBayGameplayLoopV34.Enabled){
+    BuildGameplayUIV34();
+    game.GameplayV34=gameObject.AddComponent<SeaBayGameplayLoopV34>();
+    game.GameplayV34.Initialize(game,bay,this,housesV31);
+   }
    game.Notify("雾岬岛 · 东岸  |  滚轮拉远视野，B / G 海湾营造。");Debug.Log("SEAMLESS_V29_READY nativeMeshes="+native.sourceMeshes+" samples="+native.coveredSamples+" cliffs="+coastCount+" reef="+reefCount);
    if(Checking)StartCoroutine(ReviewV29());
   }
-  void Update(){if(!Ready)return;if(game.InRoom&&Input.GetKeyDown(KeyCode.V)&&!game.save.tanks[game.SelectedTank].built)game.Notify("先在当前建设位摆放展缸，再按 V 近景观赏。");if(Input.GetKeyDown(KeyCode.L)&&!game.Paused&&game.Panel==0)ToggleLantern();if(!game.InRoom&&!game.OnFoot&&!game.Busy&&!game.Paused&&game.Panel==0&&!bay.godBuildMode&&!PointerOverUI())AdjustSailZoom(Input.mouseScrollDelta.y);}
+  void Update(){if(!Ready)return;if(game.InRoom&&Input.GetKeyDown(KeyCode.V)&&!game.save.tanks[game.SelectedTank].built)game.Notify("先在当前建设位摆放展缸，再按 V 近景观赏。");if(Input.GetKeyDown(KeyCode.L)&&!game.Paused&&!game.WorkshopOpenV34&&game.Panel==0)ToggleLantern();if(!game.InRoom&&!game.OnFoot&&!game.Busy&&!game.Paused&&!game.WorkshopOpenV34&&game.Panel==0&&!bay.godBuildMode&&!PointerOverUI())AdjustSailZoom(Input.mouseScrollDelta.y);}
   public void AdjustSailZoom(float wheel){customSailZoom=Mathf.Clamp(customSailZoom-wheel*1.8f,8.5f,34);}
   public static float SailingSize(SeaLifeRuntime g,float normal){return Active!=null&&Active.Ready&&!g.InRoom&&!g.OnFoot&&!g.Busy?Active.customSailZoom:normal;}
   public void ToggleLantern(){LanternOn=!LanternOn;}

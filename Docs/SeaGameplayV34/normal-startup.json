@@ -1,0 +1,12 @@
+﻿{
+    "importedCoins":  30,
+    "executableSHA256":  "059C313352892718258A120B87BDC6FC7C23CE67181084ABE14F86F204F5DDDB",
+    "assemblySHA256":  "E9867A9704D5ACA82494BFD22A7A243DD3C5E4AF81DCFB204A546124266D9AC5",
+    "passed":  true,
+    "loadedBuildings":  19,
+    "importedFish":  2,
+    "copiedLayoutSHA256":  "CB77E8580D4F867C5D11873BB2219766FAC3B9DBC7F1F90E3DA4E3B87BFC179C",
+    "legacySavesUnchanged":  5,
+    "pid":  11964,
+    "savedBuiltTanks":  1
+}

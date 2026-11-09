@@ -1,4 +1,4 @@
-param([int]$TargetPid,[string]$Evidence)
+param([int]$TargetPid,[string]$Evidence,[switch]$Gameplay)
 $ErrorActionPreference='Stop'
 Import-Module 'C:/Windows/System32/WindowsPowerShell/v1.0/Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1'
 Add-Type -TypeDefinition @'
@@ -61,5 +61,18 @@ try{
  AwaitPhase 'await-gallery-b';Key 0x42
  AwaitPhase 'await-gallery-v';Key 0x56
  AwaitPhase 'await-gallery-f';Key 0x46
+ if($Gameplay){
+  AwaitPhase 'await-v34-time';Key 0x54
+  AwaitPhase 'await-v34-lamp';Key 0x4C
+  AwaitPhase 'await-v34-workshop';Key 0x45
+  AwaitPhase 'await-v34-motor'
+  $m=Get-Content (Join-Path $Evidence 'v34-button.json') -Raw -Encoding UTF8|ConvertFrom-Json
+  $point=New-Object SeamlessNativeV29+Point;$point.X=[int]($m.x*$rect.Right/1920);$point.Y=$rect.Bottom-[int]($m.y*$rect.Bottom/1080)
+  [SeamlessNativeV29]::ClientToScreen($target.MainWindowHandle,[ref]$point)|Out-Null
+  GuardFocus;[SeamlessNativeV29]::SetCursorPos($point.X,$point.Y)|Out-Null;Start-Sleep -Milliseconds 280;Click $false
+  AwaitPhase 'await-v34-close';Key 0x1B
+  AwaitPhase 'await-v34-hook-tool';Key 0x32
+  AwaitPhase 'await-v34-tow';Key 0x45
+ }
  AwaitPhase 'done';Write-Output 'SEAMLESS_NATIVE_SEQUENCE_OK'
-}finally{foreach($key in @(0x47,0x57,0x33,0x52,0x42,0x56,0x46)){[SeamlessNativeV29]::keybd_event($key,0,2,[UIntPtr]::Zero)}}
+}finally{foreach($key in @(0x47,0x57,0x33,0x52,0x42,0x56,0x46,0x54,0x4C,0x45,0x1B,0x32)){[SeamlessNativeV29]::keybd_event($key,0,2,[UIntPtr]::Zero)}}
