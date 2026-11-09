@@ -33,7 +33,7 @@ namespace Deepsea {
    InitMaterials();worldRoot=Group("V27_HarborAndReefArt",game.world,Vector3.zero);
    Transform visual=game.boat.Find("船身随波 · 视觉层");boatRoot=Group("V27_BoatArtDetails",visual!=null?visual:game.boat,Vector3.zero);
    BuildBoat();BuildPier();BuildGallery();UpgradeReef();
-   var wr=game.world.Find("ShowcaseWater").GetComponent<Renderer>();water=wr.sharedMaterial;originalWaterShader=water.shader;harborWaterShader=Resources.Load<Material>("SeaHarborV27/WaterShaderKeep").shader;
+   var wr=game.world.Find("ShowcaseWater").GetComponent<Renderer>();water=wr.sharedMaterial;originalWaterShader=water.shader;harborWaterShader=ApplyMistCapeEmeraldWaterV35.Bind(game,Resources.Load<Material>("SeaHarborV27/WaterShaderKeep").shader);
    originalReefLife=Shader.GetGlobalFloat("_BayReefLife");
    ApplyAtmosphereState(v27AtmosphereEnabled);Ready=true;
    game.Notify("v27 港湾与礁区 · F8岸景/珊瑚对照 · F7水面调参 · F6水面对照 · F9帧率。");

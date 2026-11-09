@@ -1,6 +1,6 @@
 # 深海灯塔当前工程
 
-当前最新版为 v34。新增漂流物打捞、提灯夜钓、捕蟹笼收益和渔村工坊，沿用 v30 航海界面。首次导入 v33 进度后使用 v34 独立存档。见 Docs/SeaGameplayV34/README.md，程序 Builds/SeaGameplayV34/Guichao-SeaGameplayV34.exe。
+当前最新版为 v35。更新雾岬岛浅滩翡翠水色、双层焦散、木桩涟漪与 V 形尾浪。沿用 v34 的玩法和存档及 v30 航海界面。见 Docs/SeaMistCapeV35/README.md，程序 Builds/SeaMistCapeV35/Guichao-SeaMistCapeV35.exe。
 
 历史海岸美术版本：v11，2026-10-23 完成独立程序验收。主要分析与制作记录在 `C:/Users/许嘉乐/Documents/ChatGPT/深海灯塔/art-v11/reference-analysis.md`，项目内副本见 `Docs/原图对照与美术推进-v11.md`。
 
