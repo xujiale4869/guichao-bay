@@ -49,14 +49,17 @@ namespace Deepsea.Editor
 
             int total = 0;
             foreach (string model in Models)
-                total += Bake("Village_V32_" + model);
+            {
+                string name = "Village_V32_" + model;
+                total += BakeMesh(name,Sources+name+".json",Assets+"Baked/"+name+".asset");
+            }
             AssetDatabase.SaveAssets();
             Debug.Log("CRAFT_V32_BAKED models=" + Models.Length + " triangles=" + total);
         }
 
-        static int Bake(string name)
+        internal static int BakeMesh(string name, string sourcePath, string assetPath)
         {
-            var source = JsonUtility.FromJson<Source>(File.ReadAllText(Sources + name + ".json"));
+            var source = JsonUtility.FromJson<Source>(File.ReadAllText(sourcePath));
             int count = source?.vertices?.Length / 3 ?? 0;
             if (count == 0 || source.name != name || source.vertices.Length != 3*count
                 || source.normals?.Length != 3*count || source.uv?.Length != 2*count
@@ -96,10 +99,9 @@ namespace Deepsea.Editor
             mesh.RecalculateBounds();
             if (mesh.bounds.size.y < .05f || mesh.bounds.size.y > 12f)
                 throw new InvalidDataException("Invalid bounds for " + name);
-            string path = Assets + "Baked/" + name + ".asset";
-            var prior = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            var prior = AssetDatabase.LoadAssetAtPath<Mesh>(assetPath);
             if (prior == null)
-                AssetDatabase.CreateAsset(mesh,path);
+                AssetDatabase.CreateAsset(mesh,assetPath);
             else
             {
                 EditorUtility.CopySerialized(mesh,prior);

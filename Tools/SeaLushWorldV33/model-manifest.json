@@ -1,0 +1,210 @@
+{
+  "models": [
+    {
+      "name": "Land_0_CoastalPineTrunk",
+      "triangles": 162,
+      "vertices": 302,
+      "roles": [
+        "Timber"
+      ],
+      "boundsMetres": [
+        [
+          -1.46683,
+          -0.26314,
+          -0.48612
+        ],
+        [
+          1.56599,
+          4.31473,
+          0.58584
+        ]
+      ]
+    },
+    {
+      "name": "Land_0_CoastalPineCanopy",
+      "triangles": 5900,
+      "vertices": 17700,
+      "roles": [
+        "Foliage"
+      ],
+      "boundsMetres": [
+        [
+          -2.65472,
+          2.35773,
+          -1.69343
+        ],
+        [
+          2.86939,
+          4.99702,
+          1.89479
+        ]
+      ]
+    },
+    {
+      "name": "Land_1_LushFernAndHeather",
+      "triangles": 2170,
+      "vertices": 5490,
+      "roles": [
+        "Foliage"
+      ],
+      "boundsMetres": [
+        [
+          -1.42154,
+          -0.0274,
+          -1.41515
+        ],
+        [
+          1.12768,
+          0.94784,
+          1.41235
+        ]
+      ]
+    },
+    {
+      "name": "Land_2_WildflowerGrassTussock",
+      "triangles": 868,
+      "vertices": 1988,
+      "roles": [
+        "Foliage"
+      ],
+      "boundsMetres": [
+        [
+          -1.27747,
+          -0.02619,
+          -1.31192
+        ],
+        [
+          1.22263,
+          0.67343,
+          1.57056
+        ]
+      ]
+    },
+    {
+      "name": "Land_3_MossyBoulderCluster",
+      "triangles": 320,
+      "vertices": 960,
+      "roles": [
+        "Stone"
+      ],
+      "boundsMetres": [
+        [
+          -1.275,
+          -0.36231,
+          -1.12494
+        ],
+        [
+          1.38075,
+          1.03183,
+          0.93123
+        ]
+      ]
+    },
+    {
+      "name": "Prop_0_DryingNetAndRack",
+      "triangles": 786,
+      "vertices": 1494,
+      "roles": [
+        "Timber",
+        "Rope"
+      ],
+      "boundsMetres": [
+        [
+          -1.85173,
+          -0.12399,
+          -0.73674
+        ],
+        [
+          1.85173,
+          2.305,
+          0.85
+        ]
+      ]
+    },
+    {
+      "name": "Prop_1_WoodenHandcartAndBarrels",
+      "triangles": 836,
+      "vertices": 1716,
+      "roles": [
+        "Timber",
+        "Iron"
+      ],
+      "boundsMetres": [
+        [
+          -0.6684,
+          0.00363,
+          -0.77412
+        ],
+        [
+          0.6684,
+          1.06656,
+          1.55587
+        ]
+      ]
+    },
+    {
+      "name": "Prop_2_CampfireAndLogSeats",
+      "triangles": 680,
+      "vertices": 1566,
+      "roles": [
+        "Timber",
+        "Stone",
+        "Iron",
+        "Ember"
+      ],
+      "boundsMetres": [
+        [
+          -1.74515,
+          -0.07112,
+          -1.63782
+        ],
+        [
+          1.35714,
+          1.66479,
+          1.18115
+        ]
+      ]
+    },
+    {
+      "name": "Prop_3_RusticFenceSegment",
+      "triangles": 238,
+      "vertices": 510,
+      "roles": [
+        "Timber",
+        "Stone"
+      ],
+      "boundsMetres": [
+        [
+          -1.71729,
+          -0.15,
+          -0.26992
+        ],
+        [
+          1.7732,
+          1.08,
+          0.26623
+        ]
+      ]
+    },
+    {
+      "name": "Prop_4_BeachedRowboatAndOars",
+      "triangles": 612,
+      "vertices": 1240,
+      "roles": [
+        "Timber"
+      ],
+      "boundsMetres": [
+        [
+          -0.90354,
+          -0.01705,
+          -1.834
+        ],
+        [
+          1.514,
+          0.605,
+          1.92
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+    "maples": 18,
+    "mapleColors": 4,
+    "pines": 26,
+    "grass": 160,
+    "ferns": 85,
+    "boulders": 42,
+    "groundTiles": 50,
+    "reefPatches": 38,
+    "marinePlants": 189,
+    "houseFootings": [
+        11,
+        13,
+        9
+    ],
+    "propCounts": [
+        4,
+        4,
+        2,
+        14,
+        3
+    ],
+    "marineSpecies": [
+        30,
+        32,
+        32,
+        33,
+        32,
+        30
+    ]
+}

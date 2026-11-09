@@ -44,12 +44,20 @@ namespace Deepsea
             _v31Root.SetParent(worldRoot, false);
 
             InitV31MaterialsAndMeshes();
-            ReplaceRepetitiveUnderwaterFloraWithBiodiversity();
-            ApplyCoralContrastV311();
+            if (!LushV33)
+            {
+                ReplaceRepetitiveUnderwaterFloraWithBiodiversity();
+                ApplyCoralContrastV311();
+            }
             PopulateShorelineEcotoneTransition();
             BuildThreeCoastalNpcVillageHouses();
             MergePathPartsV31();
             BuildBoatyardAnnexV31();
+            if (LushV33)
+            {
+                ApplyLushWorldAndVillageLifeV33();
+                ApplyCoralContrastV311();
+            }
 
             SelectMorphologyViewsV31();Physics.SyncTransforms();
         }
