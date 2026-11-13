@@ -36,6 +36,7 @@ namespace Deepsea {
     BuildGameplayUIV34();
     game.GameplayV34=gameObject.AddComponent<SeaBayGameplayLoopV34>();
     game.GameplayV34.Initialize(game,bay,this,housesV31);
+    SeaCinematicLightingAndAtmosphereV37.Attach(game,bay,this,worldRoot);
    }
    game.Notify("雾岬岛 · 东岸  |  滚轮拉远视野，B / G 海湾营造。");Debug.Log("SEAMLESS_V29_READY nativeMeshes="+native.sourceMeshes+" samples="+native.coveredSamples+" cliffs="+coastCount+" reef="+reefCount);
    if(Checking)StartCoroutine(ReviewV29());

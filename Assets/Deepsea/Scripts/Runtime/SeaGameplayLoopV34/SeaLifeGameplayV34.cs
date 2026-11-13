@@ -81,6 +81,7 @@ namespace Deepsea {
    SetWaterWatchV34(watch);
    RenderSettings.ambientSkyColor=sky[watch];RenderSettings.ambientEquatorColor=equator[watch];RenderSettings.ambientGroundColor=groundAmbient[watch];
    var probe=new SphericalHarmonicsL2();probe.AddAmbientLight(ambient[watch]);RenderSettings.ambientProbe=probe;
+   if(SeaCinematicLightingAndAtmosphereV37.Enabled)GetComponent<SeaCinematicLightingAndAtmosphereV37>()?.ApplyWatch(watch);
   }
   static readonly string[] WaterColorsV34={"_CrystalShoreColor","_Shallow","_ReefMidColor","_Deep","_SunPathColor"};
   static readonly string[] WaterDetailsV34={"_GlintIntensity","_FoamIntensity","_CausticsIntensity"};

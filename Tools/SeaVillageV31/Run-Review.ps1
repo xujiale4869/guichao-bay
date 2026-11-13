@@ -1,12 +1,12 @@
-param([string]$Evidence='village-v31-review06',[switch]$Native,[switch]$CoralContrast,[switch]$Craft,[switch]$Lush,[switch]$Gameplay,[switch]$MistCape,[switch]$MistCapePhysical,[switch]$MistCapeOrganic,[switch]$SunnyAudio,[switch]$AudioFallback,[switch]$CoralSurvey,[int]$TableSample=-1,[int]$AnemoneSample=-1)
+param([string]$Evidence='village-v31-review06',[switch]$Native,[switch]$CoralContrast,[switch]$Craft,[switch]$Lush,[switch]$Gameplay,[switch]$MistCape,[switch]$MistCapePhysical,[switch]$MistCapeOrganic,[switch]$SunnyAudio,[switch]$Atmosphere,[switch]$AudioFallback,[switch]$CoralSurvey,[int]$TableSample=-1,[int]$AnemoneSample=-1)
 $ErrorActionPreference='Stop'
 Import-Module 'C:/Windows/System32/WindowsPowerShell/v1.0/Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1'
-if($AudioFallback -and (!$SunnyAudio -or $Native)){throw 'Audio fallback requires the non-native v36 review'}
+if($AudioFallback -and (!($SunnyAudio -or $Atmosphere) -or $Native)){throw 'Audio fallback requires the non-native v36 review'}
 if($Evidence -notmatch '^village-v31-[a-z0-9-]+$'){throw 'Invalid evidence folder'}
 $r=Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Push-Location $r
 try{
- if(Get-Process Unity,Guichao-SeaVillageV31,Guichao-SeaVillageV31.1,Guichao-SeaCraftV32,Guichao-SeaLushV33,Guichao-SeaGameplayV34,Guichao-SeaMistCapeV35,Guichao-SeaMistCapeV35_1,Guichao-SeaMistCapeV35_2,Guichao-SeaSunnyAudioV36_1 -ErrorAction SilentlyContinue){throw 'Existing Unity or v31 game is active'}
+ if(Get-Process Unity,Guichao-SeaVillageV31,Guichao-SeaVillageV31.1,Guichao-SeaCraftV32,Guichao-SeaLushV33,Guichao-SeaGameplayV34,Guichao-SeaMistCapeV35,Guichao-SeaMistCapeV35_1,Guichao-SeaMistCapeV35_2,Guichao-SeaSunnyAudioV36_1,Guichao-SeaAtmosphereV37 -ErrorAction SilentlyContinue){throw 'Existing Unity or v31 game is active'}
  $folder=$r+'/Verification/'+$Evidence;$log=$r+'/Temp/'+$Evidence+'.log'
  if(Test-Path -LiteralPath ($folder+'/result.json')){throw 'Evidence result already exists; preserve it and select a new round'}
  $args=@('-village-v31','-village-v31-check','-seamless-v29-dir',('Verification/'+$Evidence),'-screen-fullscreen','0','-screen-width','1920','-screen-height','1080','-logFile',('"'+$log+'"'))
@@ -16,12 +16,12 @@ try{
  if($TableSample -ge 0){$args+=@('-coral-table-coral-sample',[string]$TableSample)}
  if($AnemoneSample -ge 0){$args+=@('-coral-anemone-sample',[string]$AnemoneSample)}
 
- $binary=if($SunnyAudio){'Builds/SeaSunnyAudioV36_1/Guichao-SeaSunnyAudioV36_1.exe'}elseif($MistCapeOrganic){'Builds/SeaMistCapeV35_2/Guichao-SeaMistCapeV35_2.exe'}elseif($MistCapePhysical){'Builds/SeaMistCapeV35_1/Guichao-SeaMistCapeV35_1.exe'}elseif($MistCape){'Builds/SeaMistCapeV35/Guichao-SeaMistCapeV35.exe'}elseif($Gameplay){'Builds/SeaGameplayV34/Guichao-SeaGameplayV34.exe'}elseif($Lush){'Builds/SeaLushV33/Guichao-SeaLushV33.exe'}elseif($Craft){'Builds/SeaCraftV32/Guichao-SeaCraftV32.exe'}elseif($CoralContrast){'Builds/SeaVillageV31.1/Guichao-SeaVillageV31.1.exe'}else{'Builds/SeaVillageV31/Guichao-SeaVillageV31.exe'}
+ $binary=if($Atmosphere){'Builds/SeaAtmosphereV37/Guichao-SeaAtmosphereV37.exe'}elseif($SunnyAudio){'Builds/SeaSunnyAudioV36_1/Guichao-SeaSunnyAudioV36_1.exe'}elseif($MistCapeOrganic){'Builds/SeaMistCapeV35_2/Guichao-SeaMistCapeV35_2.exe'}elseif($MistCapePhysical){'Builds/SeaMistCapeV35_1/Guichao-SeaMistCapeV35_1.exe'}elseif($MistCape){'Builds/SeaMistCapeV35/Guichao-SeaMistCapeV35.exe'}elseif($Gameplay){'Builds/SeaGameplayV34/Guichao-SeaGameplayV34.exe'}elseif($Lush){'Builds/SeaLushV33/Guichao-SeaLushV33.exe'}elseif($Craft){'Builds/SeaCraftV32/Guichao-SeaCraftV32.exe'}elseif($CoralContrast){'Builds/SeaVillageV31.1/Guichao-SeaVillageV31.1.exe'}else{'Builds/SeaVillageV31/Guichao-SeaVillageV31.exe'}
  $p=Start-Process ($r+'/'+$binary) -ArgumentList $args -WorkingDirectory $r -PassThru
   $null=$p.Handle
  [IO.File]::WriteAllText($r+'/Temp/'+$Evidence+'-pid.txt',[string]$p.Id)
  $driver=$null
- if($Native){$extra=@();if($Gameplay -or $MistCape -or $MistCapePhysical -or $MistCapeOrganic -or $SunnyAudio){$extra+='-Gameplay'};$driver=Start-Process 'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe' -ArgumentList (@('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$r+'/Tools/SeaUnifiedV30/Test-NativeUI.ps1"'),'-TargetPid',$p.Id,'-Evidence',('"'+$folder+'"'))+$extra) -WorkingDirectory $r -RedirectStandardOutput ($r+'/Temp/'+$Evidence+'-driver.log') -RedirectStandardError ($r+'/Temp/'+$Evidence+'-driver-error.log') -PassThru;$null=$driver.Handle}
+ if($Native){$extra=@();if($Gameplay -or $MistCape -or $MistCapePhysical -or $MistCapeOrganic -or $SunnyAudio -or $Atmosphere){$extra+='-Gameplay'};$driver=Start-Process 'C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe' -ArgumentList (@('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$r+'/Tools/SeaUnifiedV30/Test-NativeUI.ps1"'),'-TargetPid',$p.Id,'-Evidence',('"'+$folder+'"'))+$extra) -WorkingDirectory $r -RedirectStandardOutput ($r+'/Temp/'+$Evidence+'-driver.log') -RedirectStandardError ($r+'/Temp/'+$Evidence+'-driver-error.log') -PassThru;$null=$driver.Handle}
  $started=[DateTime]::UtcNow;$reason=''
  while(!$p.WaitForExit(500)){
   $age=([DateTime]::UtcNow-$started).TotalSeconds
