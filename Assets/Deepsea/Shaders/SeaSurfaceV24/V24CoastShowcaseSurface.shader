@@ -19,6 +19,9 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
  half4 _BaseColor;float4 _AtlasCell;float _Mode,_Scale,_NormalStrength,_UseMask,_Roughness,_Metallic,_Cutoff,_Sway,_Emission;
  CBUFFER_END
  float _ShowcaseClay;
+ // The v37 exterior camera supplies the focus and watch-dependent fog colour.
+ float4 _CoastAtmosphereV37;
+ half4 _CoastMistV37;
  struct A{float4 p:POSITION;float3 n:NORMAL;float4 t:TANGENT;float2 uv:TEXCOORD0;half4 c:COLOR;UNITY_VERTEX_INPUT_INSTANCE_ID};
  struct V{float4 p:SV_POSITION;float3 w:TEXCOORD0;float3 n:TEXCOORD1;float4 t:TEXCOORD2;float2 uv:TEXCOORD3;half4 c:COLOR;UNITY_VERTEX_INPUT_INSTANCE_ID};
  V Vert(A a){V o;UNITY_SETUP_INSTANCE_ID(a);UNITY_TRANSFER_INSTANCE_ID(a,o);o.w=TransformObjectToWorld(a.p.xyz);
@@ -64,12 +67,13 @@ half3 OceanLow(V i){
  if(_NormalStrength>.01){float3 b=UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap,sampler_BumpMap,uv));
   float3 bump;if(_Mode<1.5)bump=weight.x>weight.y&&weight.x>weight.z?float3(sign(n.x)*b.z,b.y,b.x):weight.y>weight.z?float3(b.x,sign(n.y)*b.z,b.y):float3(b.x,b.y,sign(n.z)*b.z);
   else{float3 tangent=normalize(i.t.xyz);bump=tangent*b.x+cross(n,tangent)*i.t.w*b.y+n*b.z;}n=normalize(lerp(n,bump,_NormalStrength));}
+ float sandV37=0;
  if(_Mode<1.5){
   float patch=.5+.22*sin(i.w.x*.37+sin(i.w.z*.24)*2)+.18*sin(i.w.z*.54-i.w.x*.21);
   float land=smoothstep(.1,.8,i.w.y),moss=smoothstep(.42,.88,geom.y)*land*smoothstep(.30,.72,patch);
   half3 cover=SAMPLE_TEXTURE2D(_CoverMap,sampler_CoverMap,i.w.xz*.31).rgb;cover=lerp(dot(cover,half3(.299,.587,.114)).xxx,cover,.25)*half3(.32,.42,.21);
   albedo=lerp(albedo,cover,moss*.65);
-  if(_Mode>.5){float sand=smoothstep(.50,.91,geom.y)*(1-smoothstep(-8,-4,i.w.y)*0);sand*=1-saturate(i.c.r);
+  if(_Mode>.5){float sand=smoothstep(.50,.91,geom.y)*(1-smoothstep(-8,-4,i.w.y)*0);sand*=1-saturate(i.c.r);sandV37=sand;
    half3 grit=SAMPLE_TEXTURE2D(_SandMap,sampler_SandMap,i.w.xz*.17).rgb;grit=lerp(half3(.57,.58,.47),grit,.6)*half3(.92,.92,.80);albedo=lerp(albedo,grit,sand);
    float coverWeight=saturate(i.c.r)*smoothstep(.57,.94,geom.y);albedo=lerp(albedo,cover,coverWeight*.88);}
  }
@@ -79,6 +83,18 @@ half3 OceanLow(V i){
   float patch=.5+.24*sin(i.w.x*.83+sin(i.w.z*.61)*2)+.2*sin(i.w.z*1.37+i.w.x*.53);
   float moss=smoothstep(.58,.9,geom.y)*smoothstep(.45,.74,patch)*smoothstep(.2,1.3,i.w.y);albedo=lerp(albedo,albedo*half3(.55,.68,.34),moss*.52);}
  float wet=1-smoothstep(-.45,.6,i.w.y);albedo*=lerp(half3(1,1,1),half3(.83,.94,.91),wet*.48);
+ float wetSand=0;
+ if(_CoastAtmosphereV37.w>0 && _ShowcaseClay<.5){
+  float shore=i.w.y+.22+.028*sin(i.w.x*.93+sin(i.w.z*.58));
+  float band=(1-smoothstep(.06,.49,shore))*smoothstep(-.37,-.07,shore);
+  wetSand=band*sandV37;
+  albedo*=lerp(1,half3(.62,.54,.47),wetSand);
+  rough=lerp(rough,.10,wetSand);
+  if(_Mode<.5||abs(_Mode-2)<.1||abs(_Mode-8)<.1){
+   float stain=(1-smoothstep(.04,.27,abs(shore)))*(1-smoothstep(.45,.83,geom.y));
+   albedo*=lerp(1,half3(.53,.64,.57),stain*.46);
+  }
+ }
  if(_ShowcaseClay>.5){albedo=half3(.52,.52,.52);n=geom;rough=.95;}
  SurfaceData s=(SurfaceData)0;s.albedo=albedo;s.metallic=_Metallic;s.specular=half3(.04,.04,.04);s.smoothness=1-rough;s.normalTS=half3(0,0,1);s.occlusion=ao;s.alpha=1;s.emission=albedo*_Emission;
  InputData input=(InputData)0;input.positionWS=i.w;input.normalWS=n;input.viewDirectionWS=GetWorldSpaceNormalizeViewDir(i.w);input.shadowCoord=TransformWorldToShadowCoord(i.w);input.bakedGI=max(half3(.075,.11,.13),SampleSH(n));input.normalizedScreenSpaceUV=GetNormalizedScreenSpaceUV(i.p);input.shadowMask=half4(1,1,1,1);
@@ -92,6 +108,33 @@ half3 OceanLow(V i){
  if(depth>0)c+=albedo*half3(.07,.10,.10)*(1-sun.shadowAttenuation)*exp(-depth*.09);
  if(abs(_Mode-5)<.1&&depth>0&&_WorldSpaceCameraPos.y>-.22)c.r*=min(24,exp(depth*1.12));
  if(_WorldSpaceCameraPos.y<-.25){float f=1-exp(-distance(_WorldSpaceCameraPos,i.w)*.11);c=lerp(c,half3(.018,.10,.13),f);}
+ if(_CoastAtmosphereV37.w>0 && _ShowcaseClay<.5 && depth<.26){
+  float air=smoothstep(-.22,.24,-depth);
+  float shadow=(1-sun.shadowAttenuation)*air*_CoastAtmosphereV37.w;
+  c*=lerp(1,half3(.74,.88,1.01),shadow*.63);
+  float facing=saturate(dot(geom,input.viewDirectionWS));
+  float rim=pow(1-facing,3.8)*saturate(dot(geom,sun.direction)+.24);
+  c+=albedo*sun.color*rim*sun.shadowAttenuation*air*_CoastAtmosphereV37.w*.32;
+  float along=TransformWorldToView(_CoastAtmosphereV37.xyz).z-TransformWorldToView(i.w).z;
+  float distant=smoothstep(12,78,along);
+  float coastal=1-smoothstep(1,11,i.w.y+.22);
+  c=lerp(c,_CoastMistV37.rgb,distant*(.45+.55*coastal)*air*_CoastMistV37.a);
+ }
+ if(wetSand>.001){
+  // A thin water film follows the shore slope without inheriting the dry sand's grain.
+  float3 filmNormal=normalize(lerp(geom,float3(0,1,0),.38));
+  float viewCos=saturate(dot(filmNormal,input.viewDirectionWS));
+  float fresnel=.0204+.9796*pow(1-viewCos,5);
+  float3 reflected=reflect(-input.viewDirectionWS,filmNormal);
+  float horizon=1-smoothstep(.04,.72,reflected.y);
+  half3 sky=lerp(_CoastMistV37.rgb*.66,_CoastMistV37.rgb*1.42,horizon);
+  float moonlight=lerp(.26,1,saturate(sun.color.r));
+  float specCos=saturate(dot(reflected,sun.direction));
+  float reflectedSun=pow(specCos,90)*1.65+pow(specCos,22)*.18;
+  float sunMask=saturate(dot(filmNormal,sun.direction))*sun.shadowAttenuation;
+  c=lerp(c,sky,wetSand*saturate((.05+fresnel)*2.35)*moonlight);
+  c+=sun.color*(wetSand*reflectedSun*sunMask*(.28+fresnel));
+ }
  if(budget>0)c=lerp(c,OceanLow(i),budget);return half4(c,1);}
  ENDHLSL
  }

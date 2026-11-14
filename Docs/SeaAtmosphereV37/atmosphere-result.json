@@ -1,0 +1,19 @@
+{
+    "waterShader": "Deepsea/SeaSurfaceSparkleHarborV27",
+    "terrainShader": "Deepsea/V24CoastShowcaseSurface",
+    "noonPitch": 31.000001907348634,
+    "noonYaw": -44.0,
+    "focusDistance": 107.0086669921875,
+    "shoreFocusDistance": 107.36405181884766,
+    "focusAperture": 3.200000047683716,
+    "subjectNearDepth": 100.16620635986328,
+    "subjectFarDepth": 114.85449981689453,
+    "subjectCoC": 0.004799710586667061,
+    "noonBeamOpacity": 0.23999999463558198,
+    "beams": 9,
+    "contacts": 64,
+    "visibleLandmarks": 21,
+    "sameViewFrozenTime": true,
+    "planningKeepsSharpView": true,
+    "nightBeamsOff": true
+}

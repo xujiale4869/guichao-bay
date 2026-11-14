@@ -1,6 +1,6 @@
 # 深海灯塔当前工程
 
-当前最新版为 v36.1。四态阳光海港配乐使用尼龙吉他、马林巴、手风琴与拇指琴，收获使用短木琴水珠音。水面沿用用户认可的 v34 原版港湾渲染，玩法和存档沿用 v34，航海界面沿用 v30。见 Docs/SeaAudioV36_1/README.md，程序 Builds/SeaSunnyAudioV36_1/Guichao-SeaSunnyAudioV36_1.exe。
+当前最新版为 v37。雾岬岛采用暖金斜阳、冷青背光、林间光束和湿沙反光。程序见 Builds/SeaAtmosphereV37，验收截图见 Docs/SeaAtmosphereV37。
 
 历史海岸美术版本：v11，2026-10-23 完成独立程序验收。主要分析与制作记录在 `C:/Users/许嘉乐/Documents/ChatGPT/深海灯塔/art-v11/reference-analysis.md`，项目内副本见 `Docs/原图对照与美术推进-v11.md`。
 
