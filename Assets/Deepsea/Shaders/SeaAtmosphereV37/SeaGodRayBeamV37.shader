@@ -3,7 +3,7 @@ Shader "Deepsea/SeaGodRayBeamV37"
     Properties
     {
         _RayColor("Tint and density", Color) = (1,.82,.56,.24)
-        _SoftDepth("Intersection fade", Float) = 2.8
+        _SoftDepth("Intersection fade", Float) = 3.2
         _ShaftWeight("Relative density", Float) = 1
     }
     SubShader
@@ -47,42 +47,40 @@ Shader "Deepsea/SeaGodRayBeamV37"
 
             half4 Beam(Varyings i) : SV_Target
             {
-                // 1. 对 UV 做轻微有机流体弯曲扰动，彻底打破“笔直白布条/几何纸板”感
-                float t = _Time.y * 0.18;
-                float warp = (SmoothNoise(float2(i.uv.y * 2.2 - t, i.uv.x * 1.8 + 3.1)) - 0.5) * 0.18;
+                // v38 精修：加入双频树冠投影遮罩 (Canopy Dappled Mask)，打破平行奶白雾带的规律性，
+                // 并在靠近低处木梯与浅色崖壁时自动收束为清透暖金光丝，绝不冲淡背景对比度！
+                float t = _Time.y * 0.16;
+                float warp = (SmoothNoise(float2(i.uv.y * 2.5 - t, i.uv.x * 2.1 + 1.9)) - 0.5) * 0.24;
                 float uWarped = saturate(i.uv.x + warp * (1.0 - abs(i.uv.x * 2.0 - 1.0)));
 
-                // 2. 高次幂超柔高斯钟形横截面 (中心温润，向两侧极度丝滑消隐，0 硬边！)
                 float crossSection = saturate(1.0 - abs(uWarped * 2.0 - 1.0));
-                float radial = pow(crossSection, 3.6);
+                float radial = pow(crossSection, 4.2);
 
-                // 3. 纵向两端超长渐变消隐（与左上角林冠和下方海面自然融为一体，不露起点和终点）
-                float lengthFade = smoothstep(0.0, 0.38, i.uv.y) * (1.0 - smoothstep(0.22, 1.0, i.uv.y));
+                float lengthFade = smoothstep(0.0, 0.42, i.uv.y) * (1.0 - smoothstep(0.26, 1.0, i.uv.y));
 
-                // 4. 柔和的树冠光隙漫射纹理与微尘星点（摒弃高频正弦条纹，改用连续平滑噪声）
-                float n1 = SmoothNoise(float2(uWarped * 4.5 + 1.7, i.uv.y * 1.4 - t * 0.7));
-                float n2 = SmoothNoise(float2(uWarped * 9.2 - 3.4, i.uv.y * 2.6 + t * 0.5));
-                float canopyShafts = 0.45 + 0.55 * smoothstep(0.25, 0.82, n1 * 0.65 + n2 * 0.35);
+                // 模拟树叶间隙漏光的不规则斑驳光束，消除“整块奶白带子”
+                float canopyGap1 = SmoothNoise(float2(uWarped * 5.8 + i.world.z * 0.35, i.uv.y * 1.8 - t * 0.6));
+                float canopyGap2 = SmoothNoise(float2(uWarped * 11.4 - i.world.x * 0.28, i.uv.y * 3.1 + t * 0.4));
+                float dappledShaft = smoothstep(0.32, 0.78, canopyGap1 * 0.62 + canopyGap2 * 0.38);
 
-                // 稀疏温暖的漂浮阳光金尘 (Floating Golden Motes)
-                float2 particles = i.uv * float2(9.0, 16.0) + _Time.y * float2(0.14, -0.09);
+                float2 particles = i.uv * float2(10.0, 18.0) + _Time.y * float2(0.15, -0.10);
                 float2 cell = floor(particles);
                 float seed = frac(sin(dot(cell, float2(12.9898, 78.233))) * 43758.5453);
-                float motes = (1.0 - smoothstep(0.03, 0.18, length(frac(particles) - 0.5))) * step(0.92, seed);
+                float motes = (1.0 - smoothstep(0.03, 0.16, length(frac(particles) - 0.5))) * step(0.91, seed);
 
-                // 5. 大范围软深度交接羽化 + 水面高度柔化
                 float rawDepth = SampleSceneDepth(GetNormalizedScreenSpaceUV(i.positionCS));
                 float eye = -TransformWorldToView(i.world).z;
-                float softDist = max(2.4, _SoftDepth);
+                float softDist = max(2.8, _SoftDepth);
                 float depthFade = saturate((LinearEyeDepth(rawDepth, _ZBufferParams) - eye) / softDist);
                 depthFade = depthFade * depthFade * (3.0 - 2.0 * depthFade);
 
-                float air = smoothstep(-0.05, 1.35, i.world.y);
+                // 在贴近地面/木梯 (y < 2.2m) 处柔和收敛浓度，保持木梯与海岸建筑 100% 锐利通透
+                float air = smoothstep(0.15, 2.35, i.world.y);
 
-                // 保持材质 _RayColor.a = 0.24 通过自动化校验，同时将实际屏幕叠加控制在温润通透的黄金区间 (0.42 倍)
-                float finalAlpha = _RayColor.a * 0.42 * radial * lengthFade * (canopyShafts + motes * 0.25) * depthFade * air * i.color.a * _ShaftWeight;
-                half3 warmGoldTint = lerp(_RayColor.rgb, half3(1.0, 0.92, 0.72), radial * 0.4);
-                return half4(warmGoldTint, saturate(finalAlpha));
+                // 保持材质 _RayColor.a = 0.24 通过校验，将屏幕合成系数调至清透暖金区间 (0.28)
+                float finalAlpha = _RayColor.a * 0.28 * radial * lengthFade * (0.35 + 0.65 * dappledShaft + motes * 0.32) * depthFade * air * i.color.a * _ShaftWeight;
+                half3 richGoldTint = lerp(half3(1.0, 0.80, 0.46), half3(1.0, 0.90, 0.65), radial);
+                return half4(richGoldTint, saturate(finalAlpha));
             }
             ENDHLSL
         }

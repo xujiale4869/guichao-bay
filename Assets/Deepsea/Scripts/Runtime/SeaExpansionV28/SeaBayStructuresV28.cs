@@ -27,7 +27,14 @@ namespace Deepsea {
     MeshObject("AcceptedLanternCage",t,new Vector3(.51f,2.72f,0),Vector3.one,models[0],bronze);Part("WarmCore",PrimitiveType.Cylinder,t,new Vector3(.51f,2.47f,0),new Vector3(.13f,.10f,.13f),glow);
     if(!preview){var l=Group("BoundedWarmLight",t,new Vector3(.51f,2.47f,0)).gameObject.AddComponent<Light>();l.type=LightType.Point;l.color=new Color(1,.65f,.29f);l.range=6;l.intensity=1.6f;l.shadows=LightShadows.None;}
    }else if(type==BayBuildableType.CoralReefGarden){
-    float y=-depth+.06f;Part("GroundedReefBase",PrimitiveType.Cylinder,t,new Vector3(0,y,0),new Vector3(1.60f,.09f,1.52f),stone);
+    float y=-depth+.06f;
+    bool softenReef=!preview&&SeaBayGameplayLoopV34.Enabled;
+    Part("GroundedReefBase",PrimitiveType.Cylinder,t,new Vector3(0,y-(softenReef ? .12f : 0),0),new Vector3(1.60f,softenReef ? .045f : .09f,1.52f),stone);
+    if(softenReef) for(int i=0;i<5;i++){
+     float angle=i*72f*Mathf.Deg2Rad+.35f;
+     AddCoastalRockV38(t,"ReefRimRock",new Vector3(Mathf.Cos(angle)*.65f,y,Mathf.Sin(angle)*.61f),
+      new Vector3(.40f+i*.03f,.23f,.32f),i*47f);
+    }
     float height=Mathf.Min(1.05f,depth-.35f);float modelH=Mathf.Max(.1f,models[1].bounds.max.y);
     var c=MeshObject("AcceptedBranchingCoral",t,new Vector3(-.24f,y+.08f,0),Vector3.one*(height/modelH),models[1],coral[0]);c.transform.localRotation=Quaternion.Euler(0,35,0);
     c=MeshObject("AcceptedOrangeCoral",t,new Vector3(.40f,y+.08f,.32f),Vector3.one*(height/modelH*.58f),models[1],coral[1]);c.transform.localRotation=Quaternion.Euler(0,148,0);
@@ -63,6 +70,31 @@ namespace Deepsea {
   }
   readonly List<Light> bayLights=new List<Light>();readonly Vector4[] lampPositions=new Vector4[4],lampColors=new Vector4[4];float nextLightBudget;
   void UpdateLampBudget(){if(Time.unscaledTime<nextLightBudget)return;nextLightBudget=Time.unscaledTime+.25f;bayLights.RemoveAll(l=>l==null);var nearest=bayLights.OrderBy(l=>(l.transform.position-game.view.transform.position).sqrMagnitude).Take(4).ToArray();foreach(var l in bayLights)l.enabled=nearest.Contains(l);for(int i=0;i<4;i++){if(i<nearest.Length){var l=nearest[i];var p=l.transform.position;lampPositions[i]=new Vector4(p.x,p.y,p.z,l.range);lampColors[i]=(Vector4)(l.color*l.intensity);}else{lampPositions[i]=Vector4.zero;lampColors[i]=Vector4.zero;}}Shader.SetGlobalInt("_BayV28LampCount",nearest.Length);Shader.SetGlobalVectorArray("_BayV28Lamps",lampPositions);Shader.SetGlobalVectorArray("_BayV28LampColors",lampColors);}
-  void Spawn(BayPlacedBuildingEntry b){var cell=new Vector2Int(b.gridX,b.gridZ);var p=CellPosition(cell);var obj=Structure((BayBuildableType)b.buildType,false,Mathf.Clamp(DepthAt(p,Connector(cell,b.buildType)),.6f,SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?15:5.5f));obj.name="V28_Built_"+b.buildType+"_"+b.gridX+"_"+b.gridZ;obj.transform.SetParent(buildRoot,false);obj.transform.position=p;obj.transform.rotation=Quaternion.Euler(0,b.rotationStep*90,0);buildings[cell]=obj;bayLights.AddRange(obj.GetComponentsInChildren<Light>());}
+  void AddCoastalRockV38(Transform parent,string partName,Vector3 position,Vector3 scale,float yaw){
+   var rock=Part(partName,PrimitiveType.Sphere,parent,position,scale,stone);
+   rock.transform.localRotation=Quaternion.Euler(8,yaw,-6);
+   rock.GetComponent<Renderer>().shadowCastingMode=ShadowCastingMode.On;
+  }
+
+  void AddLanternPlinthV38(Transform lantern){
+   var plinth=Group("LanternReefPlinth",lantern,new Vector3(0,-.06f,0));
+   AddCoastalRockV38(plinth,"PlinthRock",Vector3.zero,new Vector3(1.65f,.62f,1.50f),18);
+   AddCoastalRockV38(plinth,"PlinthRock",new Vector3(.58f,-.10f,-.42f),new Vector3(.95f,.45f,.88f),52);
+   AddCoastalRockV38(plinth,"PlinthRock",new Vector3(-.52f,-.08f,.46f),new Vector3(1.05f,.48f,.92f),-34);
+   AddCoastalRockV38(plinth,"PlinthRock",new Vector3(.15f,-.14f,.64f),new Vector3(.78f,.38f,.74f),110);
+   for(int i=0;i<3;i++){
+    float angle=i*120f*Mathf.Deg2Rad+.4f;
+    Part("FenderPile",PrimitiveType.Cylinder,plinth,new Vector3(Mathf.Cos(angle)*.24f,.28f,Mathf.Sin(angle)*.24f),
+     new Vector3(.13f,.48f,.13f),wood);
+   }
+  }
+
+  void Spawn(BayPlacedBuildingEntry b){var cell=new Vector2Int(b.gridX,b.gridZ);var p=CellPosition(cell);var obj=Structure((BayBuildableType)b.buildType,false,Mathf.Clamp(DepthAt(p,Connector(cell,b.buildType)),.6f,SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?15:5.5f));obj.name="V28_Built_"+b.buildType+"_"+b.gridX+"_"+b.gridZ;obj.transform.SetParent(buildRoot,false);obj.transform.position=p;obj.transform.rotation=Quaternion.Euler(0,b.rotationStep*90,0);buildings[cell]=obj;bayLights.AddRange(obj.GetComponentsInChildren<Light>());
+   if (SeaBayGameplayLoopV34.Enabled && b.buildType == (int)BayBuildableType.PierLanternPost &&
+       b.gridZ == 0 && (b.gridX == 3 || b.gridX == 14) && DepthAt(p) > .20f)
+   {
+    AddLanternPlinthV38(obj.transform);
+    Debug.Log($"V38_LANTERN_PLINTH_READY {b.gridX},{b.gridZ}");
+   }}
  }
 }

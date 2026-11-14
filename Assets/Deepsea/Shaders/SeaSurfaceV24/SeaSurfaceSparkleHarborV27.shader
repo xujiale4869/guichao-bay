@@ -97,6 +97,7 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
             float _OceanV24Layer;
             float4 _CoastBoat;
             float4 _CoastBoatHeading;
+            float4 _CoastAtmosphereV37;
 
             #include "../HarborLightingV27.hlsl"
             struct Attributes
@@ -269,43 +270,72 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 half3 finalColor = lerp(underwaterComposite, surfaceReflection, saturate(fresnel * _SurfaceWeight + 0.03));
                 finalColor *= lerp(0.91, 1.09, waveShading);
 
-                // -------------------------------------------------------------
-                // 6. 波光粼粼动态微面元太阳碎光 (v26.2 黄金克制版：收束光道、稀疏灵动星芒)
-                //    移除 v26.1 中泛滥全屏的 pow 16 宽光锥，收束至迎光波峰，既波光粼粼又绝不刺眼！
-                // -------------------------------------------------------------
-                float3 halfVec = normalize(sun.direction + v);
-                float ndoth = saturate(dot(n, halfVec));
+                // 6. Sun glints use a wider lobe for the low v38 sun.
+                if (_CoastAtmosphereV37.w > 0.5)
+                {
+                    float3 tiltedSunDir = normalize(float3(sun.direction.x * 0.55, max(0.62, sun.direction.y), sun.direction.z * 0.55));
+                    float3 sparkleNormal = normalize(float3(n.x * 2.25, n.y, n.z * 2.25));
+                    float3 halfVec = normalize(tiltedSunDir + v);
+                    float ndoth = saturate(dot(sparkleNormal, halfVec));
 
-                // 柔和迎光高光基底
-                float broadSpec = pow(ndoth, 68.0) * 0.18;
+                    float broadSpec = pow(ndoth, 28.0) * 0.22 * smoothstep(0.25, 0.82, i.waveCrest);
 
-                // 双层反向微面元交汇采样
-                float2 glintUV1 = p * (_GlintScale * 0.095) + n.xz * 1.05 + float2(t * _GlintSpeed * 0.07, -t * _GlintSpeed * 0.08);
-                float2 glintUV2 = p * (_GlintScale * 0.145) - n.xz * 0.85 + float2(-t * _GlintSpeed * 0.06, t * _GlintSpeed * 0.09);
-                float maskA = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV1).b;
-                float maskB = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV2).b;
-                float maskC = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV1 * 0.53 + float2(0.41, 0.19)).r;
+                    float2 glintUV1 = p * (_GlintScale * 0.095) + n.xz * 1.15 + float2(t * _GlintSpeed * 0.07, -t * _GlintSpeed * 0.08);
+                    float2 glintUV2 = p * (_GlintScale * 0.145) - n.xz * 0.92 + float2(-t * _GlintSpeed * 0.06, t * _GlintSpeed * 0.09);
+                    float maskA = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV1).b;
+                    float maskB = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV2).b;
+                    float maskC = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV1 * 0.53 + float2(0.41, 0.19)).r;
 
-                float facet = maskA * maskB * (0.45 + 0.55 * maskC);
-                float fWidth = max(fwidth(facet), 0.018);
+                    float facet = maskA * maskB * (0.45 + 0.55 * maskC);
+                    float fWidth = max(fwidth(facet), 0.018);
 
-                // 提高触发门槛 (0.25~0.44)，让碎光点呈稀疏灵动的星点分布，而不是成片白斑
-                float sparkleMid = smoothstep(0.24 - fWidth, 0.38 + fWidth, facet);
-                float sparkleCore = smoothstep(0.34 - fWidth, 0.48 + fWidth, facet);
+                    float sparkleMid = smoothstep(0.22 - fWidth, 0.36 + fWidth, facet);
+                    float sparkleCore = smoothstep(0.32 - fWidth, 0.46 + fWidth, facet);
 
-                // 使用可调聚焦指数 _GlintFocus (默认 72)，将波光严格约束在太阳反射光道与波峰迎光面上
-                float midSunCone = pow(ndoth, max(24.0, _GlintFocus * 0.65)) * smoothstep(0.35, 0.85, i.waveCrest);
-                float coreSunCone = pow(ndoth, max(48.0, _GlintFocus * 1.45)) * smoothstep(0.42, 0.90, i.waveCrest);
+                    float midSunCone = pow(ndoth, max(8.0, _GlintFocus * 0.25)) * smoothstep(0.30, 0.82, i.waveCrest);
+                    float coreSunCone = pow(ndoth, max(16.0, _GlintFocus * 0.50)) * smoothstep(0.38, 0.88, i.waveCrest);
 
-                // 浅滩极浅处自动减弱表面碎光，避免与水底焦散打架
-                float depthSparkleMask = smoothstep(0.35, 1.80, depthM);
+                    float depthSparkleMask = smoothstep(0.28, 1.55, depthM);
 
-                float totalSparkle = (
-                    broadSpec +
-                    (sparkleMid * midSunCone * 0.35 + sparkleCore * coreSunCone * 0.85) * _GlintIntensity * _GlintEnable * depthSparkleMask
-                ) * sun.shadowAttenuation * detailScale;
+                    float totalSparkle = (
+                        broadSpec * _GlintEnable * depthSparkleMask +
+                        (sparkleMid * midSunCone * 0.48 + sparkleCore * coreSunCone * 0.95) * _GlintIntensity * _GlintEnable * depthSparkleMask
+                    ) * sun.shadowAttenuation * detailScale * saturate(sun.direction.y * 3.0);
 
-                finalColor += lerp(sun.color, _SunPathColor.rgb, 0.58) * min(totalSparkle, 1.35);
+                    half3 warmGoldGlintColor = lerp(sun.color, half3(1.0, 0.90, 0.62), 0.65);
+                    finalColor += warmGoldGlintColor * min(totalSparkle, 1.35);
+                }
+                else
+                {
+                    float3 halfVec = normalize(sun.direction + v);
+                    float ndoth = saturate(dot(n, halfVec));
+
+                    float broadSpec = pow(ndoth, 68.0) * 0.18;
+
+                    float2 glintUV1 = p * (_GlintScale * 0.095) + n.xz * 1.05 + float2(t * _GlintSpeed * 0.07, -t * _GlintSpeed * 0.08);
+                    float2 glintUV2 = p * (_GlintScale * 0.145) - n.xz * 0.85 + float2(-t * _GlintSpeed * 0.06, t * _GlintSpeed * 0.09);
+                    float maskA = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV1).b;
+                    float maskB = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV2).b;
+                    float maskC = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV1 * 0.53 + float2(0.41, 0.19)).r;
+
+                    float facet = maskA * maskB * (0.45 + 0.55 * maskC);
+                    float fWidth = max(fwidth(facet), 0.018);
+
+                    float sparkleMid = smoothstep(0.24 - fWidth, 0.38 + fWidth, facet);
+                    float sparkleCore = smoothstep(0.34 - fWidth, 0.48 + fWidth, facet);
+
+                    float midSunCone = pow(ndoth, max(24.0, _GlintFocus * 0.65)) * smoothstep(0.35, 0.85, i.waveCrest);
+                    float coreSunCone = pow(ndoth, max(48.0, _GlintFocus * 1.45)) * smoothstep(0.42, 0.90, i.waveCrest);
+
+                    float depthSparkleMask = smoothstep(0.35, 1.80, depthM);
+
+                    float totalSparkle = (
+                        broadSpec +
+                        (sparkleMid * midSunCone * 0.35 + sparkleCore * coreSunCone * 0.85) * _GlintIntensity * _GlintEnable * depthSparkleMask
+                    ) * sun.shadowAttenuation * detailScale;
+
+                    finalColor += lerp(sun.color, _SunPathColor.rgb, 0.58) * min(totalSparkle, 1.35);
+                }
 
                 // -------------------------------------------------------------
                 // 7. 岸礁/栈桥双层涌浪白沫与小船 V 型扩散尾流
