@@ -1,6 +1,6 @@
 # 深海灯塔当前工程
 
-当前最新版为 v37。雾岬岛采用暖金斜阳、冷青背光、林间光束和湿沙反光。程序见 Builds/SeaAtmosphereV37，验收截图见 Docs/SeaAtmosphereV37。
+当前最新版为 v37.1。雾岬岛更新了林间柔光、背光天光与琥珀湿滩。程序见 Builds/SeaAtmosphereV37，验收截图见 Docs/SeaAtmosphereV37。
 
 历史海岸美术版本：v11，2026-10-23 完成独立程序验收。主要分析与制作记录在 `C:/Users/许嘉乐/Documents/ChatGPT/深海灯塔/art-v11/reference-analysis.md`，项目内副本见 `Docs/原图对照与美术推进-v11.md`。
 

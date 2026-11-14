@@ -25,19 +25,32 @@ namespace Deepsea
         static readonly int Mist = Shader.PropertyToID("_CoastMistV37");
         static readonly int RayColor = Shader.PropertyToID("_RayColor");
         static readonly int ShaftWeight = Shader.PropertyToID("_ShaftWeight");
+
         static readonly Color[] MistColors = {
-            new Color(.42f,.54f,.62f,.19f), new Color(.42f,.60f,.67f,.18f),
-            new Color(.48f,.51f,.58f,.22f), new Color(.08f,.18f,.27f,.16f)
+            new Color(.46f,.58f,.68f,.18f), new Color(.48f,.66f,.76f,.17f),
+            new Color(.52f,.55f,.64f,.20f), new Color(.10f,.20f,.30f,.15f)
         };
+
+        // v37.1 精修：将 9 道光束起点全部锚定在【左侧高崖、灯塔与红枫/黑松林冠间隙】，
+        // 彻底告别在海面中央凭空冒出平行白胶带的违和感！
         static readonly Vector3[] Origins = {
-            new Vector3(-14.2f,7.8f,6.2f), new Vector3(-12.6f,6.9f,3.4f), new Vector3(-10.4f,6.2f,1.8f),
-            new Vector3(-10.8f,7.6f,-3.6f), new Vector3(-8.7f,6.1f,-6.1f), new Vector3(-8.2f,6.7f,5.8f),
-            new Vector3(-4.4f,6.8f,4.6f), new Vector3(-5.6f,7.3f,10.8f), new Vector3(-2.7f,6.4f,8.2f)
+            new Vector3(-15.5f, 8.8f,  7.4f), // 1. 灯塔崖顶北侧红枫树冠间隙
+            new Vector3(-13.8f, 8.2f,  4.8f), // 2. 灯塔塔身与南侧红枫林冠交界
+            new Vector3(-12.2f, 7.6f,  2.2f), // 3. 栈桥入口上方海岸黑松林冠
+            new Vector3(-11.4f, 7.9f, -1.8f), // 4. 西岸中部松林斜坡间隙
+            new Vector3(-10.2f, 7.2f, -5.2f), // 5. 西南角礁石与黑松林冠
+            new Vector3( -9.4f, 7.5f,  6.2f), // 6. 渔村屋舍后方高地树冠
+            new Vector3( -7.2f, 7.1f,  8.8f), // 7. 北湾内侧树林上空
+            new Vector3( -6.4f, 6.8f,  3.5f), // 8. 码头栈桥前段斜射暖阳雾晕
+            new Vector3( -4.8f, 6.6f,  9.6f)  // 9. 北岬远端林间晨曦光雾
         };
+
+        // v37.1 精修：大幅拓宽每道光束的宽度 (5.4m ~ 8.6m) 并降低单束权重 (.32 ~ .58)，
+        // 让它们彼此交融成一片温润朦胧的林间斜阳空气感，彻底消除“细白布条感”！
         static readonly Vector3[] ShaftDimensions = {
-            new Vector3(2.5f,17f,1f), new Vector3(1.8f,14f,.72f), new Vector3(2.9f,14f,.77f),
-            new Vector3(2.0f,16f,.68f), new Vector3(3.2f,17f,.60f), new Vector3(2.2f,15f,.70f),
-            new Vector3(3.1f,16f,.43f), new Vector3(2.4f,15f,.39f), new Vector3(3.8f,17f,.34f)
+            new Vector3(6.8f, 18f, .56f), new Vector3(5.8f, 16f, .48f), new Vector3(7.4f, 16f, .52f),
+            new Vector3(6.2f, 17f, .44f), new Vector3(7.8f, 18f, .40f), new Vector3(6.0f, 16f, .46f),
+            new Vector3(7.2f, 17f, .36f), new Vector3(6.4f, 15f, .38f), new Vector3(8.4f, 18f, .32f)
         };
 
         readonly List<Renderer> newCasters = new List<Renderer>();
@@ -55,7 +68,7 @@ namespace Deepsea
         DepthOfField dof;
         readonly Transform[] shafts = new Transform[Origins.Length];
         float priorShadowStrength;
-        float daylightBeamOpacity;
+        Color daylightBeamColor;
         bool presented = true, previousInRoom;
         internal int Contacts { get; private set; }
         internal int Shafts => shafts.Length;
@@ -87,7 +100,7 @@ namespace Deepsea
             visual.SetParent(game.exterior, false);
 
             beamMaterial = new Material(Resources.Load<Material>("SeaAtmosphereV37/BeamKeep"));
-            daylightBeamOpacity = beamMaterial.GetColor(RayColor).a;
+            daylightBeamColor = beamMaterial.GetColor(RayColor);
             beamMesh = MakeBeam();
             for (int i = 0; i < shafts.Length; i++)
             {
@@ -115,18 +128,20 @@ namespace Deepsea
             float pitch = watch == 1 ? 31f : watch == 0 ? 24f : 16f;
             float yaw = watch == 2 ? 34f : -44f;
             sun.transform.rotation = Quaternion.Euler(pitch, yaw, 0);
-            sun.color = watch == 2 ? new Color(1,.64f,.39f) : new Color(1,.92f,.77f);
-            sun.intensity = watch == 1 ? 2.15f : watch == 0 ? 1.65f : 1.22f;
-            sun.shadowStrength = .92f;
-            var sky = new Color(.17f,.28f,.39f);
-            var bounce = new Color(.14f,.12f,.10f);
+            sun.color = watch == 2 ? new Color(1, .68f, .42f) : new Color(1, .93f, .79f);
+            sun.intensity = watch == 1 ? 2.05f : watch == 0 ? 1.62f : 1.22f;
+
+            // v37.1 精修：将阴影强度从死黑的 .92f 调回温润通透的 .75f，并大幅提亮蔚蓝天光与暖沙反射环境光！
+            sun.shadowStrength = .75f;
+            var sky = new Color(.28f, .42f, .56f);
+            var bounce = new Color(.25f, .22f, .18f);
             RenderSettings.ambientSkyColor = sky;
-            RenderSettings.ambientEquatorColor = new Color(.16f,.24f,.30f);
+            RenderSettings.ambientEquatorColor = new Color(.26f, .38f, .48f);
             RenderSettings.ambientGroundColor = bounce;
             var probe = new SphericalHarmonicsL2();
-            probe.AddAmbientLight(new Color(.14f,.18f,.22f));
-            probe.AddDirectionalLight(Vector3.up, sky, .24f);
-            probe.AddDirectionalLight(Vector3.down, bounce, .14f);
+            probe.AddAmbientLight(new Color(.22f, .28f, .34f));
+            probe.AddDirectionalLight(Vector3.up, sky, .32f);
+            probe.AddDirectionalLight(Vector3.down, bounce, .22f);
             RenderSettings.ambientProbe = probe;
         }
 
@@ -171,13 +186,14 @@ namespace Deepsea
             visual.gameObject.SetActive(sailingView);
             if (!sailingView) return;
 
-            float opacity = watch == 3 ? 0 : watch == 2 ? daylightBeamOpacity * .80f : daylightBeamOpacity;
-            beamMaterial.SetColor(RayColor, new Color(1f,.83f,.57f,opacity));
+            var rayColor = daylightBeamColor;
+            rayColor.a *= watch == 3 ? 0 : watch == 2 ? .80f : 1f;
+            beamMaterial.SetColor(RayColor, rayColor);
             Vector3 direction = sun.transform.forward;
             for (int i = 0; i < shafts.Length; i++)
             {
-                shafts[i].gameObject.SetActive(opacity > 0);
-                if (opacity <= 0) continue;
+                shafts[i].gameObject.SetActive(rayColor.a > 0);
+                if (rayColor.a <= 0) continue;
                 var center = Origins[i] + direction * (ShaftDimensions[i].y * .42f);
                 var side = Vector3.Cross(direction, camera.position - center).normalized;
                 if (side.sqrMagnitude < .01f) side = camera.right;
@@ -225,7 +241,6 @@ namespace Deepsea
             {
                 if (landmark == null || !landmark.enabled || !landmark.gameObject.activeInHierarchy) continue;
                 Bounds bounds = landmark.bounds;
-                // Distant workshops can leave the focus range as the player sails out of the harbour.
                 if ((bounds.center - boatTarget).sqrMagnitude > 42f * 42f ||
                     !GeometryUtility.TestPlanesAABB(cameraFrustum, bounds)) continue;
                 float depth = Vector3.Dot(bounds.center - camera.position, camera.forward);
@@ -235,7 +250,6 @@ namespace Deepsea
                 VisibleLandmarkCount++;
             }
 
-            // URP blur is proportional to 1 - focus/depth. Equalize the near and far subject error.
             float focus = 2f * near * far / (near + far);
             float error = (far - near) / (near + far);
             float focalMetres = FocalLengthMm * .001f;
@@ -257,22 +271,22 @@ namespace Deepsea
             volume = rig.AddComponent<Volume>();
             volume.isGlobal = true;
             volume.weight = 0;
-            volume.priority = 205; // The existing coastal profile has priority 200.
+            volume.priority = 205;
             profile = ScriptableObject.CreateInstance<VolumeProfile>();
             volume.sharedProfile = profile;
 
             var vignette = profile.Add<Vignette>();
-            vignette.color.Override(new Color(.035f,.065f,.095f));
-            vignette.intensity.Override(.18f);
-            vignette.smoothness.Override(.49f);
+            vignette.color.Override(new Color(.04f,.09f,.14f));
+            vignette.intensity.Override(.16f);
+            vignette.smoothness.Override(.52f);
             var bloom = profile.Add<Bloom>();
-            bloom.threshold.Override(1.16f);
-            bloom.intensity.Override(.22f);
-            bloom.scatter.Override(.61f);
-            bloom.tint.Override(new Color(1,.94f,.85f));
+            bloom.threshold.Override(1.12f);
+            bloom.intensity.Override(.28f);
+            bloom.scatter.Override(.68f);
+            bloom.tint.Override(new Color(1,.94f,.84f));
             var color = profile.Add<ColorAdjustments>();
-            color.postExposure.Override(.04f);
-            color.contrast.Override(6f);
+            color.postExposure.Override(.06f);
+            color.contrast.Override(5f);
             dof = profile.Add<DepthOfField>();
             dof.mode.Override(DepthOfFieldMode.Bokeh);
             dof.focusDistance.Override(DefaultFocusDistance);
@@ -309,9 +323,11 @@ namespace Deepsea
                         }
                     }
                     if (Contacts >= MaximumContacts) continue;
+                    // v37.1 精修：仅在离水面高于 0.35m 的干燥陆地树根/屋底生成轻柔接触软阴影，
+                    // 不在浅滩水边和木栈桥底部叠黑片，彻底消除水边与桥下死黑斑块！
                     float y = coast.HeightAt(position.x,position.z);
-                    if (y < SeaLifeRuntime.Sea - .04f) continue;
-                    float radius = rock ? Mathf.Clamp(target.lossyScale.x * .65f,1.15f,2.7f) : house || tower ? 3.1f : 1.12f;
+                    if (y < SeaLifeRuntime.Sea + .35f) continue;
+                    float radius = rock ? Mathf.Clamp(target.lossyScale.x * .52f,.85f,1.8f) : house || tower ? 2.4f : .95f;
                     AddGroundPatch(position,radius,vertices,uv,triangles,masks);
                     Contacts++;
                 }
@@ -324,7 +340,8 @@ namespace Deepsea
             shadeMesh.SetTriangles(triangles,0);
             var shadows = new GameObject("Terrain fitted contact shadows");
             shadows.transform.SetParent(visual,false);
-            AddRenderer(shadows,shadeMesh,Resources.Load<Material>("SeaAtmosphereV37/ContactKeep"));
+            var contactMat = Resources.Load<Material>("SeaAtmosphereV37/ContactKeep");
+            AddRenderer(shadows,shadeMesh,contactMat);
         }
 
         void AddGroundPatch(Vector3 center, float radius, List<Vector3> vertices, List<Vector2> uv,
@@ -338,9 +355,9 @@ namespace Deepsea
                 float px = center.x + (t.x * 2 - 1) * radius;
                 float pz = center.z + (t.y * 2 - 1) * radius;
                 float y = coast.HeightAt(px,pz);
-                vertices.Add(new Vector3(px,y + .045f,pz));
+                vertices.Add(new Vector3(px,y + .035f,pz));
                 uv.Add(t);
-                byte alpha = (byte)Mathf.RoundToInt(Mathf.InverseLerp(SeaLifeRuntime.Sea,SeaLifeRuntime.Sea + .24f,y) * 255);
+                byte alpha = (byte)Mathf.RoundToInt(Mathf.InverseLerp(SeaLifeRuntime.Sea + .35f,SeaLifeRuntime.Sea + .85f,y) * 180);
                 masks.Add(new Color32(255,255,255,alpha));
                 if (x == 0 || z == 0) continue;
                 int c = first + z * Grid + x;
@@ -358,7 +375,7 @@ namespace Deepsea
             var mesh = new Mesh { name = "V37 Sun Shaft" };
             mesh.vertices = new[] {
                 new Vector3(-.50f,-.5f,0), new Vector3(.50f,-.5f,0),
-                new Vector3(-.25f,.5f,0), new Vector3(.25f,.5f,0)
+                new Vector3(-.38f,.5f,0), new Vector3(.38f,.5f,0)
             };
             mesh.uv = new[] { Vector2.zero, Vector2.right, Vector2.up, Vector2.one };
             mesh.colors = new[] { Color.white, Color.white, Color.white, Color.white };
