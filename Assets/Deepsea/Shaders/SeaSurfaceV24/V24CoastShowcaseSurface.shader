@@ -89,7 +89,7 @@ half3 OceanLow(V i){
   float band=(1-smoothstep(.06,.49,shore))*smoothstep(-.37,-.07,shore);
   wetSand=band*sandV37;
   albedo*=lerp(1,half3(.62,.54,.47),wetSand);
-  rough=lerp(rough,.22,wetSand*.85);
+  rough=lerp(rough,.10,wetSand);
   if(_Mode<.5||abs(_Mode-2)<.1||abs(_Mode-8)<.1){
    float stain=(1-smoothstep(.04,.27,abs(shore)))*(1-smoothstep(.45,.83,geom.y));
    albedo*=lerp(1,half3(.53,.64,.57),stain*.46);
@@ -115,12 +115,25 @@ half3 OceanLow(V i){
   float facing=saturate(dot(geom,input.viewDirectionWS));
   float rim=pow(1-facing,3.8)*saturate(dot(geom,sun.direction)+.24);
   c+=albedo*sun.color*rim*sun.shadowAttenuation*air*_CoastAtmosphereV37.w*.32;
-  float film=.045+.34*pow(1-facing,4);
-  c=lerp(c,half3(.26,.43,.53)+sun.color*.10,wetSand*film*.56);
   float along=TransformWorldToView(_CoastAtmosphereV37.xyz).z-TransformWorldToView(i.w).z;
   float distant=smoothstep(12,78,along);
   float coastal=1-smoothstep(1,11,i.w.y+.22);
   c=lerp(c,_CoastMistV37.rgb,distant*(.45+.55*coastal)*air*_CoastMistV37.a);
+ }
+ if(wetSand>.001){
+  // A thin water film follows the shore slope without inheriting the dry sand's grain.
+  float3 filmNormal=normalize(lerp(geom,float3(0,1,0),.38));
+  float viewCos=saturate(dot(filmNormal,input.viewDirectionWS));
+  float fresnel=.0204+.9796*pow(1-viewCos,5);
+  float3 reflected=reflect(-input.viewDirectionWS,filmNormal);
+  float horizon=1-smoothstep(.04,.72,reflected.y);
+  half3 sky=lerp(_CoastMistV37.rgb*.66,_CoastMistV37.rgb*1.42,horizon);
+  float moonlight=lerp(.26,1,saturate(sun.color.r));
+  float specCos=saturate(dot(reflected,sun.direction));
+  float reflectedSun=pow(specCos,90)*1.65+pow(specCos,22)*.18;
+  float sunMask=saturate(dot(filmNormal,sun.direction))*sun.shadowAttenuation;
+  c=lerp(c,sky,wetSand*saturate((.05+fresnel)*2.35)*moonlight);
+  c+=sun.color*(wetSand*reflectedSun*sunMask*(.28+fresnel));
  }
  if(budget>0)c=lerp(c,OceanLow(i),budget);return half4(c,1);}
  ENDHLSL

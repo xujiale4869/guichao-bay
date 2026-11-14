@@ -2,7 +2,7 @@ Shader "Deepsea/SeaGodRayBeamV37"
 {
     Properties
     {
-        _RayColor("Tint and density", Color) = (1,.82,.56,.12)
+        _RayColor("Tint and density", Color) = (1,.82,.56,.24)
         _SoftDepth("Intersection fade", Float) = 1.3
         _ShaftWeight("Relative density", Float) = 1
     }

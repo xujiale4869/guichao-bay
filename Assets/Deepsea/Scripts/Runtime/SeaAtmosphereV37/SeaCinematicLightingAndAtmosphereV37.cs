@@ -13,20 +13,14 @@ namespace Deepsea
     [DefaultExecutionOrder(1200)]
     public sealed class SeaCinematicLightingAndAtmosphereV37 : MonoBehaviour
     {
-        internal static bool Enabled
-        {
-            get
-            {
-#if DEEPSEA_V37
-                return true;
-#else
-                return false;
-#endif
-            }
-        }
+        internal static bool Enabled => true;
 
         const int MaximumContacts = 64;
         const int Grid = 5;
+        const float DefaultFocusDistance = 21.5f;
+        internal const float FocalLengthMm = 155f;
+        const float MinimumAperture = 3.2f;
+        internal const float MaximumSubjectCoC = .042f;
         static readonly int Coast = Shader.PropertyToID("_CoastAtmosphereV37");
         static readonly int Mist = Shader.PropertyToID("_CoastMistV37");
         static readonly int RayColor = Shader.PropertyToID("_RayColor");
@@ -47,6 +41,8 @@ namespace Deepsea
         };
 
         readonly List<Renderer> newCasters = new List<Renderer>();
+        readonly List<MeshRenderer> focusLandmarks = new List<MeshRenderer>();
+        readonly Plane[] cameraFrustum = new Plane[6];
         SeaLifeRuntime game;
         SeaBayExpansionAndBuildSpaceV28 bay;
         SeaSeamlessWorldAndNauticalUIV29 coast;
@@ -59,18 +55,22 @@ namespace Deepsea
         DepthOfField dof;
         readonly Transform[] shafts = new Transform[Origins.Length];
         float priorShadowStrength;
+        float daylightBeamOpacity;
         bool presented = true, previousInRoom;
         internal int Contacts { get; private set; }
         internal int Shafts => shafts.Length;
         internal bool ExteriorEffects { get; private set; }
         internal bool FocusActive => dof.active;
         internal float FocusDistance => dof.focusDistance.value;
+        internal float FocusAperture => dof.aperture.value;
+        internal float SubjectNearDepth { get; private set; }
+        internal float SubjectFarDepth { get; private set; }
+        internal int VisibleLandmarkCount { get; private set; }
         internal float BeamOpacity => beamMaterial.GetColor(RayColor).a;
 
         internal static void Attach(SeaLifeRuntime runtime, SeaBayExpansionAndBuildSpaceV28 layout,
             SeaSeamlessWorldAndNauticalUIV29 scenery, Transform roots)
         {
-            if (!Enabled) return;
             var effect = runtime.gameObject.AddComponent<SeaCinematicLightingAndAtmosphereV37>();
             effect.Initialize(runtime, layout, scenery, roots);
         }
@@ -87,6 +87,7 @@ namespace Deepsea
             visual.SetParent(game.exterior, false);
 
             beamMaterial = new Material(Resources.Load<Material>("SeaAtmosphereV37/BeamKeep"));
+            daylightBeamOpacity = beamMaterial.GetColor(RayColor).a;
             beamMesh = MakeBeam();
             for (int i = 0; i < shafts.Length; i++)
             {
@@ -96,6 +97,7 @@ namespace Deepsea
                 AddRenderer(card, beamMesh, beamMaterial, ShaftDimensions[i].z);
                 shafts[i] = card.transform;
             }
+            CollectFocusLandmarks();
             BuildContactShade(roots);
             ConfigureVolume();
             ApplyWatch(game.GameplayV34.State.watch);
@@ -153,7 +155,7 @@ namespace Deepsea
             dof.active = sailingView && !game.OnFoot;
             var camera = game.view.transform;
             var focus = game.ActivePosition + Vector3.up * .75f;
-            dof.focusDistance.value = Mathf.Max(1, Vector3.Dot(focus - camera.position, camera.forward));
+            if (dof.active) FocusSailingView(focus);
 
             int watch = game.GameplayV34.State.watch;
             bool lightChanged = presented && game.InRoom != previousInRoom;
@@ -169,7 +171,7 @@ namespace Deepsea
             visual.gameObject.SetActive(sailingView);
             if (!sailingView) return;
 
-            float opacity = watch == 3 ? 0 : watch == 2 ? .16f : .18f;
+            float opacity = watch == 3 ? 0 : watch == 2 ? daylightBeamOpacity * .80f : daylightBeamOpacity;
             beamMaterial.SetColor(RayColor, new Color(1f,.83f,.57f,opacity));
             Vector3 direction = sun.transform.forward;
             for (int i = 0; i < shafts.Length; i++)
@@ -181,6 +183,68 @@ namespace Deepsea
                 if (side.sqrMagnitude < .01f) side = camera.right;
                 shafts[i].SetPositionAndRotation(center, Quaternion.LookRotation(Vector3.Cross(side,-direction),-direction));
             }
+        }
+
+        void CollectFocusLandmarks()
+        {
+            Transform exterior = game.exterior;
+            foreach (var renderer in exterior.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                for (var node = renderer.transform; node != null && node != exterior; node = node.parent)
+                {
+                    string name = node.name;
+                    if (!name.StartsWith("EN_Pier_Wood_", System.StringComparison.Ordinal) &&
+                        !name.StartsWith("V31_NPC_House_", System.StringComparison.Ordinal) &&
+                        name != "HeroLighthouse" && !name.Contains("海洋小馆 · 码头入口")) continue;
+                    focusLandmarks.Add(renderer);
+                    break;
+                }
+            }
+        }
+
+        void FocusSailingView(Vector3 boatTarget)
+        {
+            var view = game.view;
+            var camera = view.transform;
+            float boatDepth = Vector3.Dot(boatTarget - camera.position, camera.forward);
+            VisibleLandmarkCount = 0;
+            if (!(boatDepth > view.nearClipPlane && boatDepth <= view.farClipPlane))
+            {
+                SubjectNearDepth = SubjectFarDepth = DefaultFocusDistance;
+                dof.focusDistance.value = DefaultFocusDistance;
+                dof.aperture.value = MinimumAperture;
+                return;
+            }
+
+            float near = Mathf.Max(1, boatDepth - 2.4f);
+            float far = boatDepth + 2.4f;
+            GeometryUtility.CalculateFrustumPlanes(view, cameraFrustum);
+            var depthAxes = new Vector3(Mathf.Abs(camera.forward.x), Mathf.Abs(camera.forward.y),
+                Mathf.Abs(camera.forward.z));
+            foreach (var landmark in focusLandmarks)
+            {
+                if (landmark == null || !landmark.enabled || !landmark.gameObject.activeInHierarchy) continue;
+                Bounds bounds = landmark.bounds;
+                // Distant workshops can leave the focus range as the player sails out of the harbour.
+                if ((bounds.center - boatTarget).sqrMagnitude > 42f * 42f ||
+                    !GeometryUtility.TestPlanesAABB(cameraFrustum, bounds)) continue;
+                float depth = Vector3.Dot(bounds.center - camera.position, camera.forward);
+                float extent = Vector3.Dot(bounds.extents, depthAxes);
+                near = Mathf.Min(near, Mathf.Max(1, depth - extent));
+                far = Mathf.Max(far, depth + extent);
+                VisibleLandmarkCount++;
+            }
+
+            // URP blur is proportional to 1 - focus/depth. Equalize the near and far subject error.
+            float focus = 2f * near * far / (near + far);
+            float error = (far - near) / (near + far);
+            float focalMetres = FocalLengthMm * .001f;
+            float safeAperture = FocalLengthMm * focalMetres * error /
+                (Mathf.Max(.01f,focus - focalMetres) * MaximumSubjectCoC);
+            SubjectNearDepth = near;
+            SubjectFarDepth = far;
+            dof.focusDistance.value = focus;
+            dof.aperture.value = Mathf.Clamp(safeAperture,MinimumAperture,32f);
         }
 
         void ConfigureVolume()
@@ -211,9 +275,9 @@ namespace Deepsea
             color.contrast.Override(6f);
             dof = profile.Add<DepthOfField>();
             dof.mode.Override(DepthOfFieldMode.Bokeh);
-            dof.focusDistance.Override(104f);
-            dof.focalLength.Override(155f);
-            dof.aperture.Override(4.5f);
+            dof.focusDistance.Override(DefaultFocusDistance);
+            dof.focalLength.Override(FocalLengthMm);
+            dof.aperture.Override(MinimumAperture);
         }
 
         void BuildContactShade(Transform roots)
@@ -230,7 +294,7 @@ namespace Deepsea
                     bool tree = label.StartsWith("V29_CoastMaple_") || label.StartsWith("V33_CoastalPine_") ||
                                 label.StartsWith("Maple_") || label.StartsWith("BlackPine_");
                     bool rock = label.StartsWith("V29_CoastRock_");
-                    bool tower = label == "Lighthouse" || label == "灯塔";
+                    bool tower = label == "HeroLighthouse" || label == "灯塔";
                     bool house = label.StartsWith("V31_NPC_House_");
                     if (!tree && !rock && !house && !tower) continue;
                     var position = target.position;

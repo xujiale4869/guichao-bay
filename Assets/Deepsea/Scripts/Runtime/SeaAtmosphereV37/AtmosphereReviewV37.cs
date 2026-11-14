@@ -12,8 +12,9 @@ namespace Deepsea
         sealed class AtmosphereEvidenceV37
         {
             public string waterShader, terrainShader;
-            public float noonPitch, noonYaw, focusDistance;
-            public int beams, contacts;
+            public float noonPitch, noonYaw, focusDistance, shoreFocusDistance, focusAperture,
+                subjectNearDepth, subjectFarDepth, subjectCoC, noonBeamOpacity;
+            public int beams, contacts, visibleLandmarks;
             public bool sameViewFrozenTime, planningKeepsSharpView, nightBeamsOff;
         }
 
@@ -44,7 +45,12 @@ namespace Deepsea
                 noonYaw = Mathf.DeltaAngle(0,sun.transform.eulerAngles.y),
                 focusDistance = atmosphere.FocusDistance,
                 beams = atmosphere.Shafts,
-                contacts = atmosphere.Contacts
+                contacts = atmosphere.Contacts,
+                noonBeamOpacity = atmosphere.BeamOpacity,
+                focusAperture = atmosphere.FocusAperture,
+                subjectNearDepth = atmosphere.SubjectNearDepth,
+                subjectFarDepth = atmosphere.SubjectFarDepth,
+                visibleLandmarks = atmosphere.VisibleLandmarkCount
             };
             Check(proof.waterShader == SeaSunnyHarborAudioV36.WaterShader &&
                   game.GetComponent<ApplyMistCapeEmeraldWaterV35>() == null,
@@ -53,11 +59,18 @@ namespace Deepsea
                   "v37 wet shore shader is bound to the continuous land mesh");
             Check(Mathf.Abs(proof.noonPitch-31) < .05f && Mathf.Abs(proof.noonYaw+44) < .05f,
                   "v37 noon light uses the slanted sun");
-            Check(proof.beams == 9 && proof.contacts > 12 && proof.contacts <= 64 && atmosphere.BeamOpacity > 0,
-                  "v37 shaft and terrain contact effects are populated and bounded");
-            Check(atmosphere.FocusActive && atmosphere.FocusDistance > 90 && atmosphere.FocusDistance < 115 &&
+            Check(proof.beams == 9 && proof.contacts > 12 && proof.contacts <= 64 &&
+                  Mathf.Abs(proof.noonBeamOpacity-.24f)<.001f,
+                  "v37 nine shafts use .24 noon opacity and bounded terrain contacts");
+            float focal = SeaCinematicLightingAndAtmosphereV37.FocalLengthMm;
+            float cocScale = focal * focal * .001f / (proof.focusAperture * (proof.focusDistance-focal*.001f));
+            proof.subjectCoC = cocScale * Mathf.Max(Mathf.Abs(1-proof.focusDistance / proof.subjectNearDepth),
+                Mathf.Abs(1-proof.focusDistance / proof.subjectFarDepth));
+            Check(atmosphere.FocusActive && proof.visibleLandmarks > 0 &&
+                  proof.focusDistance >= proof.subjectNearDepth && proof.focusDistance <= proof.subjectFarDepth &&
+                  proof.subjectCoC <= SeaCinematicLightingAndAtmosphereV37.MaximumSubjectCoC + .0005f &&
                   data.renderPostProcessing && data.requiresDepthTexture,
-                  "v37 lens focuses the real perspective sailing camera");
+                  "v37 perspective focus covers the boat and visible nearby landmarks within the blur budget");
 
             Time.timeScale = 0;
             Vector3 viewPosition = game.view.transform.position;
@@ -75,6 +88,9 @@ namespace Deepsea
             game.PlaceBoat(new Vector3(-3.8f,SeaLifeRuntime.Sea,.9f),196);
             game.SetWaterReviewAngleV35(angle,customSailZoom);
             yield return new WaitForSecondsRealtime(.85f);
+            proof.shoreFocusDistance = atmosphere.FocusDistance;
+            Check(Mathf.Abs(proof.shoreFocusDistance-proof.focusDistance)>.02f,
+                  "v37 lens recalculates focus after sailing to the wharf");
             Time.timeScale = 0;
             atmosphere.PresentForReview(false);
             yield return Capture("v37-shore-baseline-v361");
