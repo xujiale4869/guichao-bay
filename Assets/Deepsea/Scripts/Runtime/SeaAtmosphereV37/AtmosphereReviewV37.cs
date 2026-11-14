@@ -99,13 +99,15 @@ namespace Deepsea
             Time.timeScale = 1;
 
             bay.ToggleGodBuildMode(true);
-            yield return null;
-            proof.planningKeepsSharpView = bay.godBuildMode && !atmosphere.ExteriorEffects && !atmosphere.FocusActive;
+            // Sample the planning camera and lighting after LateUpdate.
+            yield return new WaitForEndOfFrame();
+            proof.planningKeepsSharpView = bay.godBuildMode && game.view.orthographic &&
+                !atmosphere.ExteriorEffects && !atmosphere.FocusActive;
             Check(proof.planningKeepsSharpView,"v37 planning mode keeps the construction grid sharp");
             bay.ToggleGodBuildMode(false);
             game.GameplayV34.CycleWatch();
             game.GameplayV34.CycleWatch();
-            yield return null;
+            yield return new WaitForEndOfFrame();
             proof.nightBeamsOff = game.GameplayV34.State.watch == 3 && atmosphere.BeamOpacity < .001f &&
                                   Mathf.Abs(sun.intensity-.30f) < .001f;
             Check(proof.nightBeamsOff,"v37 sunlight shafts switch off and the night watch retains moonlight");
