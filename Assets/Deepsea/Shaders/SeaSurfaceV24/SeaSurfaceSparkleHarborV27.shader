@@ -142,20 +142,19 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 return o;
             }
 
-            float SampleDeviceDepth(float2 uv)
+            float DeviceDepthForWorldPosition(float depth)
             {
-                float d = SampleSceneDepth(uv);
                 #if !UNITY_REVERSED_Z
-                d = lerp(UNITY_NEAR_CLIP_VALUE, 1.0, d);
+                depth = lerp(UNITY_NEAR_CLIP_VALUE, 1.0, depth);
                 #endif
-                return d;
+                return depth;
             }
 
             half4 Frag(Varyings i) : SV_Target
             {
                 float2 screenUV = GetNormalizedScreenSpaceUV(i.positionCS);
-                float rawDepth = SampleDeviceDepth(screenUV);
-                float3 bottomWS = ComputeWorldSpacePosition(screenUV, rawDepth, UNITY_MATRIX_I_VP);
+                float rawDepth = SampleSceneDepth(screenUV);
+                float3 bottomWS = ComputeWorldSpacePosition(screenUV, DeviceDepthForWorldPosition(rawDepth), UNITY_MATRIX_I_VP);
                 float waterDepth = max(0.0, i.worldPos.y - bottomWS.y);
 
                 if (_CoastWaterDepthProbe > 0.5)
@@ -184,12 +183,18 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 // -------------------------------------------------------------
                 float2 refractOffset = n.xz * _Refraction * smoothstep(0.04, 0.75, waterDepth);
                 float2 refractedUV = saturate(screenUV + refractOffset);
-                float refractedEye = LinearEyeDepth(SampleSceneDepth(refractedUV), _ZBufferParams);
+                float refractedRawDepth = SampleSceneDepth(refractedUV);
+                float refractedEye = LinearEyeDepth(refractedRawDepth, _ZBufferParams);
+                float3 refractedBottomWS = bottomWS;
                 if (refractedEye < i.eyeDepth - 0.05)
                 {
                     refractedUV = screenUV;
                 }
-                float3 refractedBottomWS = ComputeWorldSpacePosition(refractedUV, SampleDeviceDepth(refractedUV), UNITY_MATRIX_I_VP);
+                else
+                {
+                    refractedBottomWS = ComputeWorldSpacePosition(refractedUV,
+                        DeviceDepthForWorldPosition(refractedRawDepth), UNITY_MATRIX_I_VP);
+                }
                 float refractedDepth = max(0.0, i.worldPos.y - refractedBottomWS.y);
                 float depthM = lerp(waterDepth, refractedDepth, 0.65);
 
