@@ -8,7 +8,9 @@ float _OceanV24Time,_OceanV24Motion;
 void WaveV24(float2 p,float t,float2 direction,float amplitude,float wavelength,float phase,inout float3 d,inout float3 dx,inout float3 dz){
  direction=normalize(direction);float k=6.28318530718/wavelength;
  float frequency=sqrt(9.8*k),angle=dot(direction,p)*k-t*frequency*.78+phase;
- float s=sin(angle),c=cos(angle),q=.70;
+ float s,c;
+ sincos(angle,s,c);
+ float q=.70;
  d+=float3(q*amplitude*direction.x*c,amplitude*s,q*amplitude*direction.y*c);
  float horizontal=-q*amplitude*k*s,vertical=amplitude*k*c;
  dx+=float3(horizontal*direction.x*direction.x,vertical*direction.x,horizontal*direction.y*direction.x);
@@ -23,7 +25,8 @@ float3 OceanV24Sample(float2 p,float t,out float3 dx,out float3 dz){
 float3 OceanV24Displacement(float2 p,float t){float3 dx,dz;return OceanV24Sample(p,t,dx,dz);}
 float3 OceanV24Field(float2 world,float t){
  float2 param=world;float3 dx,dz,d;
- [unroll]for(int j=0;j<6;j++){d=OceanV24Sample(param,t,dx,dz);param=world-d.xz;}
+ // This is the inverse used for shader queries. The surface vertex and CPU samples keep their wave definitions.
+ [unroll]for(int j=0;j<2;j++){d=OceanV24Displacement(param,t);param=world-d.xz;}
  d=OceanV24Sample(param,t,dx,dz);float det=dx.x*dz.z-dz.x*dx.z;
  return float3(d.y,(dx.y*dz.z-dz.y*dx.z)/det,(dz.y*dx.x-dx.y*dz.x)/det);
 }

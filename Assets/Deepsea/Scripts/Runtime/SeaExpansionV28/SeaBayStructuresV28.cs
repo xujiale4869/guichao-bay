@@ -61,7 +61,7 @@ namespace Deepsea {
   }
 
   // Merge same-material static parts once per construction, leaving coral sway and buoy motion intact.
-  void CombineStaticParts(GameObject go){
+  internal void CombineStaticParts(GameObject go){
    var staticParts=go.GetComponentsInChildren<MeshFilter>().Where(f=>f.GetComponent<Renderer>()!=null&&!f.name.Contains("Accepted")&&!f.name.Contains("Kelp")&&!f.transform.parent.name.Equals("Float")).ToArray();
    foreach(var group in staticParts.GroupBy(f=>f.GetComponent<Renderer>().sharedMaterial)){
     if(group.Count()<2)continue;var mesh=new Mesh{name="V28_Combined_"+group.Key.name,indexFormat=IndexFormat.UInt32};mesh.CombineMeshes(group.Select(f=>new CombineInstance{mesh=f.sharedMesh,transform=go.transform.worldToLocalMatrix*f.transform.localToWorldMatrix}).ToArray(),true,true);(go.GetComponent<BayOwnedGeometryV28>()??go.AddComponent<BayOwnedGeometryV28>()).meshes.Add(mesh);MeshObject("Combined_"+group.Key.name,go.transform,Vector3.zero,Vector3.one,mesh,group.Key);
@@ -76,24 +76,17 @@ namespace Deepsea {
    rock.GetComponent<Renderer>().shadowCastingMode=ShadowCastingMode.On;
   }
 
-  void AddLanternPlinthV38(Transform lantern){
-   var plinth=Group("LanternReefPlinth",lantern,new Vector3(0,-.06f,0));
-   AddCoastalRockV38(plinth,"PlinthRock",Vector3.zero,new Vector3(1.65f,.62f,1.50f),18);
-   AddCoastalRockV38(plinth,"PlinthRock",new Vector3(.58f,-.10f,-.42f),new Vector3(.95f,.45f,.88f),52);
-   AddCoastalRockV38(plinth,"PlinthRock",new Vector3(-.52f,-.08f,.46f),new Vector3(1.05f,.48f,.92f),-34);
-   AddCoastalRockV38(plinth,"PlinthRock",new Vector3(.15f,-.14f,.64f),new Vector3(.78f,.38f,.74f),110);
-   for(int i=0;i<3;i++){
-    float angle=i*120f*Mathf.Deg2Rad+.4f;
-    Part("FenderPile",PrimitiveType.Cylinder,plinth,new Vector3(Mathf.Cos(angle)*.24f,.28f,Mathf.Sin(angle)*.24f),
-     new Vector3(.13f,.48f,.13f),wood);
-   }
+  void AddLanternPlinthV381(Transform lantern){
+   var plinth=Group("LanternReefPlinth",lantern,Vector3.zero);
+   SeaCinematicLightingAndAtmosphereV37.BuildLanternPlinthV381(game,plinth,stone,wood);
+   CombineStaticParts(plinth.gameObject);
   }
 
   void Spawn(BayPlacedBuildingEntry b){var cell=new Vector2Int(b.gridX,b.gridZ);var p=CellPosition(cell);var obj=Structure((BayBuildableType)b.buildType,false,Mathf.Clamp(DepthAt(p,Connector(cell,b.buildType)),.6f,SeaSeamlessWorldAndNauticalUIV29.SceneEnabled?15:5.5f));obj.name="V28_Built_"+b.buildType+"_"+b.gridX+"_"+b.gridZ;obj.transform.SetParent(buildRoot,false);obj.transform.position=p;obj.transform.rotation=Quaternion.Euler(0,b.rotationStep*90,0);buildings[cell]=obj;bayLights.AddRange(obj.GetComponentsInChildren<Light>());
    if (SeaBayGameplayLoopV34.Enabled && b.buildType == (int)BayBuildableType.PierLanternPost &&
-       b.gridZ == 0 && (b.gridX == 3 || b.gridX == 14) && DepthAt(p) > .20f)
+       DepthAt(p) > .45f)
    {
-    AddLanternPlinthV38(obj.transform);
+    AddLanternPlinthV381(obj.transform);
     Debug.Log($"V38_LANTERN_PLINTH_READY {b.gridX},{b.gridZ}");
    }}
  }

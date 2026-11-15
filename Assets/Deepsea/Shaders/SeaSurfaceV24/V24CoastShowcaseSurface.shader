@@ -26,43 +26,47 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
     V Vert(A a){
       V o;UNITY_SETUP_INSTANCE_ID(a);UNITY_TRANSFER_INSTANCE_ID(a,o);
       o.w=TransformObjectToWorld(a.p.xyz);
-      float amplitude = _Sway * a.c.a;
-      float sway = sin(_Time.y*1.3+o.w.x*.8+o.w.z*.4)*amplitude;
-      if (_CoastAtmosphereV37.w > 0 && _Sway > 0) {
-        float major = sin(_Time.y*1.45+o.w.x*.75+o.w.z*.42);
-        float flutter = cos(_Time.y*3.10+o.w.x*2.10-o.w.z*1.85)*.28;
-        amplitude *= abs(_Mode-4)<.1 ? 1.35 : 1;
-        sway = (major+flutter)*amplitude;
-        o.w.z += sway*.42;
-        o.w.y += flutter*amplitude*.18;
-      } else {
-        o.w.z += sway*.36;
+      if (_Sway != 0) {
+        float amplitude = _Sway * a.c.a;
+        if (_CoastAtmosphereV37.w > 0 && _Sway > 0) {
+          float major = sin(_Time.y*1.45+o.w.x*.75+o.w.z*.42);
+          float flutter = cos(_Time.y*3.10+o.w.x*2.10-o.w.z*1.85)*.28;
+          amplitude *= abs(_Mode-4)<.1 ? 1.35 : 1;
+          float sway = (major+flutter)*amplitude;
+          o.w.x += sway;
+          o.w.z += sway*.42;
+          o.w.y += flutter*amplitude*.18;
+        } else {
+          float sway = sin(_Time.y*1.3+o.w.x*.8+o.w.z*.4)*amplitude;
+          o.w.x += sway;
+          o.w.z += sway*.36;
+        }
       }
-      o.w.x += sway;
       o.p=TransformWorldToHClip(o.w);
       o.n=TransformObjectToWorldNormal(a.n);
       o.t=float4(TransformObjectToWorldDir(a.t.xyz),a.t.w*GetOddNegativeScale());
       o.uv=a.uv;o.c=a.c;
       return o;
     }
-    half4 Base(V i,float3 weight){
+    half4 Base(V i,float3 weight,float3 uv,float3 dx,float3 dy){
       if(abs(_Mode-5)<.1)return SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,_AtlasCell.xy+.003+frac(i.uv*2)*.494);
       if(_Mode>1.5)return SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv);
-      return SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.w.zy*_Scale)*weight.x+SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.w.xz*_Scale)*weight.y+SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.w.xy*_Scale)*weight.z;
+      half4 top=SAMPLE_TEXTURE2D_GRAD(_BaseMap,sampler_BaseMap,uv.xz,dx.xz,dy.xz);
+      [branch] if(weight.y>=.98)return top;
+      half4 sides=SAMPLE_TEXTURE2D_GRAD(_BaseMap,sampler_BaseMap,uv.zy,dx.zy,dy.zy)*weight.x
+          +SAMPLE_TEXTURE2D_GRAD(_BaseMap,sampler_BaseMap,uv.xy,dx.xy,dy.xy)*weight.z;
+      return lerp(top*weight.y+sides,top,smoothstep(.94,.98,weight.y));
     }
     void ClipLeaf(V i){if(abs(_Mode-4)<.1)clip(SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).a-_Cutoff);}
 
-    half3 OceanLowLight(float3 p,float3 n,half3 albedo){
-      Light sun=GetMainLight(TransformWorldToShadowCoord(p));
+    half3 OceanLow(float3 n,half3 baseAlbedo,half3 sandSample,float sand,float depth,Light sun){
+      half3 albedo=baseAlbedo*half3(.9184,.9712,.9568);
+      if(abs(_Mode-1)<.1){
+        half3 grit=lerp(half3(.57,.58,.47),sandSample,.6)*half3(.92,.92,.80);
+        albedo=lerp(albedo,grit,sand);
+      }
       half3 ambient=max(lerp(half3(.075,.11,.13),half3(.16,.25,.34),saturate(_CoastAtmosphereV37.w)),SampleSH(n));
-      return albedo*(ambient+sun.color*saturate(dot(n,sun.direction))*.96*sun.shadowAttenuation);
-    }
-
-    half3 OceanLow(V i){
-      float3 n=normalize(i.n),w=pow(abs(n),4);w/=max(.001,dot(w,1));
-      half3 albedo=Base(i,w).rgb*_BaseColor.rgb*half3(.9184,.9712,.9568);
-      if(abs(_Mode-1)<.1){float sand=smoothstep(.50,.91,n.y)*(1-saturate(i.c.r));half3 grit=SAMPLE_TEXTURE2D(_SandMap,sampler_SandMap,i.w.xz*.17).rgb;grit=lerp(half3(.57,.58,.47),grit,.6)*half3(.92,.92,.80);albedo=lerp(albedo,grit,sand);}
-      half3 c=OceanLowLight(i.w,n,albedo);float depth=-.22-i.w.y;
+      half3 c=albedo*(ambient+sun.color*saturate(dot(n,sun.direction))*.96*sun.shadowAttenuation);
       c+=albedo*half3(.12,.17,.18)*exp(-depth*.10);
       if(abs(_Mode-5)<.1)c.r*=min(24,exp(depth*1.12));
       return c+albedo*_Emission;
@@ -79,11 +83,23 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
     #pragma multi_compile_fragment _ _SHADOWS_SOFT
     half4 Frag(V i):SV_Target{
       UNITY_SETUP_INSTANCE_ID(i);
-      float budget=smoothstep(.25,.85,-.22-i.w.y)*_OceanV24UnderLOD*((_Mode<1.5||(_Mode>4.5&&_Mode<7.5))?1:0)*step(-.22,_WorldSpaceCameraPos.y);
-      if(budget>.999)return half4(OceanLow(i),1);
+      float depth=-.22-i.w.y;
+      float budget=smoothstep(.25,.85,depth)*_OceanV24UnderLOD*((_Mode<1.5||(_Mode>4.5&&_Mode<7.5))?1:0);
+      if(_CoastAtmosphereV37.w>0 && _ShowcaseClay<.5 && _Mode<1.5)
+        budget=max(budget,smoothstep(1.35,2.7,depth));
+      budget*=step(-.22,_WorldSpaceCameraPos.y);
       ClipLeaf(i);
       float3 n=normalize(i.n),geom=n,weight=pow(abs(n),4);weight/=max(.001,dot(weight,1));
-      half4 tex=Base(i,weight);half3 albedo=tex.rgb*_BaseColor.rgb;float rough=_Roughness,ao=1;
+      float3 baseUV=i.w*_Scale;
+      half3 baseAlbedo=Base(i,weight,baseUV,ddx(baseUV),ddy(baseUV)).rgb*_BaseColor.rgb;
+      float sand=_Mode>.5 && _Mode<1.5 ? smoothstep(.50,.91,geom.y)*(1-saturate(i.c.r)) : 0;
+      half3 sandSample=0;
+      if(_Mode>.5 && _Mode<1.5)
+        sandSample=SAMPLE_TEXTURE2D(_SandMap,sampler_SandMap,i.w.xz*.17).rgb;
+      float4 shadowCoord=TransformWorldToShadowCoord(i.w);
+      Light sun=GetMainLight(shadowCoord);
+      [branch] if(budget>.999)return half4(OceanLow(geom,baseAlbedo,sandSample,sand,depth,sun),1);
+      half3 albedo=baseAlbedo;float rough=_Roughness,ao=1;
       float2 uv=i.uv;if(_Mode<1.5)uv=(weight.x>weight.y&&weight.x>weight.z?i.w.zy:weight.y>weight.z?i.w.xz:i.w.xy)*_Scale;
       if(_UseMask>.5){half3 arm=SAMPLE_TEXTURE2D(_MaskMap,sampler_MaskMap,uv).rgb;ao=lerp(_CoastAtmosphereV37.w>0 ? .80 : .76,1,arm.r);rough=arm.g;}
       if(_NormalStrength>.01){float3 b=UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap,sampler_BumpMap,uv));
@@ -98,8 +114,8 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
         half3 cover=SAMPLE_TEXTURE2D(_CoverMap,sampler_CoverMap,i.w.xz*.31).rgb;cover=lerp(dot(cover,half3(.299,.587,.114)).xxx,cover,coastV38 ? .28 : .25)*(coastV38 ? half3(.34,.45,.23) : half3(.32,.42,.21));
         albedo=lerp(albedo,cover,moss*.65);
         if(_Mode>.5){
-          float sand=smoothstep(.50,.91,geom.y)*(1-smoothstep(-8,-4,i.w.y)*0);sand*=1-saturate(i.c.r);sandV37=sand;
-          half3 grit=SAMPLE_TEXTURE2D(_SandMap,sampler_SandMap,i.w.xz*.17).rgb;
+          sandV37=sand;
+          half3 grit=sandSample;
           float sandGrain = .94 + .06 * sin(i.w.x * 16.0 + cos(i.w.z * 18.0));
           grit=coastV38 ? lerp(half3(.58,.58,.47),grit,.62)*half3(.95,.92,.81)*sandGrain : lerp(half3(.57,.58,.47),grit,.6)*half3(.94,.92,.81);
           albedo=lerp(albedo,grit,sand);
@@ -167,13 +183,12 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
       if(_ShowcaseClay>.5){albedo=half3(.52,.52,.52);n=geom;rough=.95;}
 
       SurfaceData s=(SurfaceData)0;s.albedo=albedo;s.metallic=_Metallic;s.specular=half3(.04,.04,.04);s.smoothness=1-rough;s.normalTS=half3(0,0,1);s.occlusion=ao;s.alpha=1;s.emission=albedo*_Emission;
-      InputData input=(InputData)0;input.positionWS=i.w;input.normalWS=n;input.viewDirectionWS=GetWorldSpaceNormalizeViewDir(i.w);input.shadowCoord=TransformWorldToShadowCoord(i.w);
+      InputData input=(InputData)0;input.positionWS=i.w;input.normalWS=n;input.viewDirectionWS=GetWorldSpaceNormalizeViewDir(i.w);input.shadowCoord=shadowCoord;
 
       // ============================================================
       // v38 穿帮修复 ③：将 `refinedShore` 与 `air` 的天光托底范围延伸至水下 -0.85m！
       // 彻底修复之前 `air = smoothstep(-.22, .24, -depth)` 在贴水处归零导致红枫树下礁石根部出现一圈黑炭边的问题！
       // ============================================================
-      float depth=-.22-i.w.y;
       bool refinedShore=_CoastAtmosphereV37.w>0 && _ShowcaseClay<.5 && depth<.85;
       float air=smoothstep(-.85,.28,-depth);
       half3 skyFloor=refinedShore ? lerp(half3(.075,.11,.13),half3(.20,.32,.44),air*_CoastAtmosphereV37.w) : half3(.075,.11,.13);
@@ -181,7 +196,6 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
       input.normalizedScreenSpaceUV=GetNormalizedScreenSpaceUV(i.p);input.shadowMask=half4(1,1,1,1);
       half3 c=UniversalFragmentPBR(input,s).rgb;
 
-      Light sun=GetMainLight(input.shadowCoord);
       if(abs(_Mode-4)<.1){
         float back=saturate(dot(-n,sun.direction));
         float canopyRim=pow(1.0-saturate(dot(n,input.viewDirectionWS)),2.6)*saturate(sun.direction.y+.3);
@@ -229,7 +243,7 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
         c=lerp(c,sky,wetSand*saturate((.08+fresnel)*1.55)*moonlight);
         c+=sun.color*half3(1.06,.95,.78)*(wetSand*reflectedSun*sunMask*(.30+fresnel));
       }
-      if(budget>0)c=lerp(c,OceanLow(i),budget);
+      if(budget>0)c=lerp(c,OceanLow(geom,baseAlbedo,sandSample,sand,depth,sun),budget);
       return half4(c,1);
     }
     ENDHLSL

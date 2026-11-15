@@ -271,39 +271,38 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 finalColor *= lerp(0.91, 1.09, waveShading);
 
                 // 6. Sun glints use a wider lobe for the low v38 sun.
-                if (_CoastAtmosphereV37.w > 0.5)
+                [branch] if (_CoastAtmosphereV37.w > 0.5)
                 {
-                    float3 tiltedSunDir = normalize(float3(sun.direction.x * 0.55, max(0.62, sun.direction.y), sun.direction.z * 0.55));
-                    float3 sparkleNormal = normalize(float3(n.x * 2.25, n.y, n.z * 2.25));
+                    float3 tiltedSunDir = normalize(float3(sun.direction.x * 0.48, max(0.68, sun.direction.y), sun.direction.z * 0.48));
+                    float3 sparkleNormal = normalize(float3(n.x * 1.65, n.y, n.z * 1.65));
                     float3 halfVec = normalize(tiltedSunDir + v);
                     float ndoth = saturate(dot(sparkleNormal, halfVec));
 
-                    float broadSpec = pow(ndoth, 28.0) * 0.22 * smoothstep(0.25, 0.82, i.waveCrest);
-
-                    float2 glintUV1 = p * (_GlintScale * 0.095) + n.xz * 1.15 + float2(t * _GlintSpeed * 0.07, -t * _GlintSpeed * 0.08);
-                    float2 glintUV2 = p * (_GlintScale * 0.145) - n.xz * 0.92 + float2(-t * _GlintSpeed * 0.06, t * _GlintSpeed * 0.09);
+                    float2 glintUV1 = p * (_GlintScale * 0.085) + n.xz * 1.25 + float2(t * _GlintSpeed * 0.07, -t * _GlintSpeed * 0.08);
+                    float2 glintUV2 = p * (_GlintScale * 0.130) - n.xz * 0.95 + float2(-t * _GlintSpeed * 0.06, t * _GlintSpeed * 0.09);
                     float maskA = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV1).b;
                     float maskB = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV2).b;
-                    float maskC = SAMPLE_TEXTURE2D(_CausticsMap, sampler_CausticsMap, glintUV1 * 0.53 + float2(0.41, 0.19)).r;
 
-                    float facet = maskA * maskB * (0.45 + 0.55 * maskC);
-                    float fWidth = max(fwidth(facet), 0.018);
+                    float facet = sqrt(saturate(maskA * maskB));
+                    float fWidth = max(fwidth(facet), 0.020);
 
-                    float sparkleMid = smoothstep(0.22 - fWidth, 0.36 + fWidth, facet);
-                    float sparkleCore = smoothstep(0.32 - fWidth, 0.46 + fWidth, facet);
+                    // Keep the highlight broken up, even on continuous swells.
+                    float sparkleMid = smoothstep(0.36 - fWidth, 0.60 + fWidth, facet);
+                    float sparkleCore = smoothstep(0.52 - fWidth, 0.75 + fWidth, facet);
 
-                    float midSunCone = pow(ndoth, max(8.0, _GlintFocus * 0.25)) * smoothstep(0.30, 0.82, i.waveCrest);
-                    float coreSunCone = pow(ndoth, max(16.0, _GlintFocus * 0.50)) * smoothstep(0.38, 0.88, i.waveCrest);
+                    float midSunCone = pow(ndoth, max(6.0, _GlintFocus / 6.0)) * lerp(0.56, 1.0, i.waveCrest);
+                    float coreSunCone = pow(ndoth, max(12.0, _GlintFocus * (26.0 / 72.0))) * lerp(0.35, 1.0, i.waveCrest);
 
-                    float depthSparkleMask = smoothstep(0.28, 1.55, depthM);
+                    float depthSparkleMask = smoothstep(0.22, 1.35, depthM);
+                    float broadSpec = pow(ndoth, 16.0) * 0.085 * sparkleMid;
 
                     float totalSparkle = (
-                        broadSpec * _GlintEnable * depthSparkleMask +
-                        (sparkleMid * midSunCone * 0.48 + sparkleCore * coreSunCone * 0.95) * _GlintIntensity * _GlintEnable * depthSparkleMask
-                    ) * sun.shadowAttenuation * detailScale * saturate(sun.direction.y * 3.0);
+                        broadSpec +
+                        (sparkleMid * midSunCone * 0.33 + sparkleCore * coreSunCone * 0.78) * _GlintIntensity
+                    ) * _GlintEnable * depthSparkleMask * sun.shadowAttenuation * saturate(sun.direction.y * 3.0);
 
-                    half3 warmGoldGlintColor = lerp(sun.color, half3(1.0, 0.90, 0.62), 0.65);
-                    finalColor += warmGoldGlintColor * min(totalSparkle, 1.35);
+                    half3 warmGoldGlintColor = lerp(sun.color, _SunPathColor.rgb * half3(1.0, 0.96, 0.81), 0.72);
+                    finalColor += warmGoldGlintColor * min(totalSparkle, 0.74);
                 }
                 else
                 {
@@ -340,38 +339,59 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 // -------------------------------------------------------------
                 // 7. 岸礁/栈桥双层涌浪白沫与小船 V 型扩散尾流
                 // -------------------------------------------------------------
-                half4 foamSample = SAMPLE_TEXTURE2D(_FoamMap, sampler_FoamMap, p * 0.36 + n.xz * 0.42 + float2(t * 0.035, -t * 0.025));
-                float laceNoise = (foamSample.r > 0.01 && foamSample.r < 0.99)
-                    ? (foamSample.r * 0.68 + foamSample.g * 0.32)
-                    : (0.5 + 0.28 * sin(p.x * 4.2 + sin(p.y * 2.3) + t * 0.9) + 0.22 * cos(p.y * 5.6 - p.x * 2.1 - t * 1.3));
-
-                float contactFoam = (1.0 - smoothstep(0.01, 0.14, depthM)) * smoothstep(0.28, 0.72, laceNoise);
-                float surgePhase = frac(depthM / max(0.18, _FoamWidth) - t * 0.30 + laceNoise * 0.26);
-                float surgeRing = sin(surgePhase * 3.14159) * (1.0 - smoothstep(0.05, _FoamWidth, depthM));
-                surgeRing = smoothstep(0.45, 0.82, surgeRing * laceNoise);
-
-                float shoreFoam = saturate(contactFoam * 0.92 + surgeRing * 0.62) * smoothstep(0.002, 0.014, depthM);
-
                 float2 boatDelta = p - _CoastBoat.xy;
-                float2 heading = normalize(_CoastBoatHeading.xy + float2(0.00001, 0.0));
-                float along = dot(boatDelta, heading);
-                float side = dot(boatDelta, float2(heading.y, -heading.x));
-                float activeSpeed = max(0.25, saturate(_CoastBoat.z / 2.8)) * max(0.35, _CoastBoat.w);
-
-                float hullRing = sqrt(pow(along / 2.20, 2.0) + pow(side / 0.94, 2.0));
-                float hullFoam = exp(-pow((hullRing - 1.0) / 0.10, 2.0)) * (0.45 + 0.55 * laceNoise) * 0.50;
-                float bowWave = exp(-pow((along - (2.05 - abs(side) * 0.42)) / 0.15, 2.0)) * (1.0 - smoothstep(0.65, 1.65, abs(side))) * activeSpeed;
-
-                float sternDist = max(0.0, -along - 1.05);
-                float wakeHalfWidth = 0.26 + sternDist * 0.27;
-                float wakeFade = exp(-sternDist * 0.15) * step(along, -0.95) * activeSpeed;
-                float vArm = exp(-pow((abs(side) - wakeHalfWidth) / (0.15 + sternDist * 0.04), 2.0)) * wakeFade;
-                float propWash = exp(-pow(side / (0.22 + sternDist * 0.05), 2.0)) * exp(-sternDist * 0.22) * step(along, -0.95) * activeSpeed;
-                float wakeFoam = saturate((vArm * 0.78 + propWash * 0.92 + hullFoam) * (0.42 + 0.58 * laceNoise));
-
-                float combinedFoam = saturate((shoreFoam + bowWave * 0.82 + wakeFoam) * _FoamIntensity);
-                half3 foamColor = lerp(half3(0.80, 0.93, 0.95), half3(0.98, 0.99, 1.0), combinedFoam);
-                finalColor = lerp(finalColor, foamColor, saturate(combinedFoam * 0.80));
+                float boatDistSq = dot(boatDelta, boatDelta);
+                bool nearShore = depthM < max(0.14, _FoamWidth);
+                // Fade the tail after it has already decayed below one percent of its original strength.
+                const float wakeEnd = 48.0;
+                bool nearWake = boatDistSq < wakeEnd * wakeEnd;
+                float2 foamUV = p * 0.36 + n.xz * 0.42 + float2(t * 0.035, -t * 0.025);
+                float2 foamDx = ddx(foamUV), foamDy = ddy(foamUV);
+                [branch] if (nearShore || nearWake)
+                {
+                    half4 foamSample = SAMPLE_TEXTURE2D_GRAD(_FoamMap, sampler_FoamMap, foamUV, foamDx, foamDy);
+                    float laceNoise = (foamSample.r > 0.01 && foamSample.r < 0.99)
+                        ? (foamSample.r * 0.68 + foamSample.g * 0.32)
+                        : (0.5 + 0.28 * sin(p.x * 4.2 + sin(p.y * 2.3) + t * 0.9) + 0.22 * cos(p.y * 5.6 - p.x * 2.1 - t * 1.3));
+                    float shoreFoam = 0.0;
+                    [branch] if (nearShore)
+                    {
+                        float contactFoam = (1.0 - smoothstep(0.01, 0.14, depthM)) * smoothstep(0.28, 0.72, laceNoise);
+                        float surgePhase = frac(depthM / max(0.18, _FoamWidth) - t * 0.30 + laceNoise * 0.26);
+                        float surgeRing = sin(surgePhase * 3.14159) * (1.0 - smoothstep(0.05, _FoamWidth, depthM));
+                        surgeRing = smoothstep(0.45, 0.82, surgeRing * laceNoise);
+                        shoreFoam = saturate(contactFoam * 0.92 + surgeRing * 0.62) * smoothstep(0.002, 0.014, depthM);
+                    }
+                    float hullFoam = 0.0, bowWave = 0.0, vArm = 0.0, propWash = 0.0;
+                    [branch] if (nearWake)
+                    {
+                        float2 heading = normalize(_CoastBoatHeading.xy + float2(0.00001, 0.0));
+                        float along = dot(boatDelta, heading);
+                        float side = dot(boatDelta, float2(heading.y, -heading.x));
+                        float activeSpeed = max(0.25, saturate(_CoastBoat.z / 2.8)) * max(0.35, _CoastBoat.w);
+                        [branch] if (boatDistSq < 16.0)
+                        {
+                            float2 hull = float2(along / 2.20, side / 0.94);
+                            float hullRing = (sqrt(dot(hull, hull)) - 1.0) / 0.10;
+                            hullFoam = exp(-hullRing * hullRing) * (0.45 + 0.55 * laceNoise) * 0.50;
+                            float bow = (along - (2.05 - abs(side) * 0.42)) / 0.15;
+                            bowWave = exp(-bow * bow) * (1.0 - smoothstep(0.65, 1.65, abs(side))) * activeSpeed;
+                        }
+                        [branch] if (along <= -0.95)
+                        {
+                            float sternDist = max(0.0, -along - 1.05);
+                            float tail = 1.0 - smoothstep(36.0 * 36.0, wakeEnd * wakeEnd, boatDistSq);
+                            float arm = (abs(side) - (0.26 + sternDist * 0.27)) / (0.15 + sternDist * 0.04);
+                            float wash = side / (0.22 + sternDist * 0.05);
+                            vArm = exp(-arm * arm - sternDist * 0.15) * tail * activeSpeed;
+                            propWash = exp(-wash * wash - sternDist * 0.22) * tail * activeSpeed;
+                        }
+                    }
+                    float wakeFoam = saturate((vArm * 0.78 + propWash * 0.92 + hullFoam) * (0.42 + 0.58 * laceNoise));
+                    float combinedFoam = saturate((shoreFoam + bowWave * 0.82 + wakeFoam) * _FoamIntensity);
+                    half3 foamColor = lerp(half3(0.80, 0.93, 0.95), half3(0.98, 0.99, 1.0), combinedFoam);
+                    finalColor = lerp(finalColor, foamColor, saturate(combinedFoam * 0.80));
+                }
 
                 if (_OceanV24Layer > 0.5 && _OceanV24Layer < 1.5) finalColor = surfaceReflection;
                 if (_OceanV24Layer > 1.5) finalColor = half3(clarity, clarity, clarity);
