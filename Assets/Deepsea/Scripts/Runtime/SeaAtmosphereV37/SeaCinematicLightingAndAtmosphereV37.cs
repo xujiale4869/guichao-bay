@@ -346,7 +346,12 @@ namespace Deepsea
                     shallowManta = renderer;
                     shallowMantaWasEnabled = renderer.enabled;
                 }
-                if (rockShader == null || !renderer.name.Contains("Land_Rock")) continue;
+                string label = renderer.name;
+                bool coastalRock = label.Contains("Land_Rock") || label.StartsWith("EN_MapleFoot",System.StringComparison.Ordinal) ||
+                    label.StartsWith("EN_MapleHeadland",System.StringComparison.Ordinal) ||
+                    label.StartsWith("EN_Foreground_Rock_",System.StringComparison.Ordinal) ||
+                    label.Contains("FineShore") && (label.Contains("Foot") || label.Contains("Headland"));
+                if (rockShader == null || !coastalRock) continue;
                 var original = renderer.sharedMaterials;
                 var refined = (Material[])original.Clone();
                 for (int i = 0; i < original.Length; i++)
@@ -431,23 +436,23 @@ namespace Deepsea
                     AddInlandPart(flowerParts,flowers,position,Quaternion.Euler(0,tryIndex*137.5f,0),Vector3.one);
             }
 
-            var starts = new[] { new Vector2(-19,10),new Vector2(-18,-4),new Vector2(-19,-23) };
+            var starts = new[] { new Vector2(-21,10),new Vector2(-21,-4),new Vector2(-25,-23) };
             var directions = new[] { new Vector2(.22f,.98f),new Vector2(-.24f,-.97f),new Vector2(.34f,.94f) };
             int wallSections = 0;
             for (int wall = 0; wall < starts.Length; wall++)
             {
-                int before = wallParts.Count;
-                for (int i = 0; i < 10; i++)
+                var run = FindTerraceRun(starts[wall],directions[wall],exclusions);
+                if (run.Count == 0) continue;
+                float yaw = Mathf.Atan2(directions[wall].x,directions[wall].y)*Mathf.Rad2Deg;
+                for (int i = 0; i < run.Count; i++)
                 {
-                    var point = starts[wall]+directions[wall]*(i*.76f);
-                    if (!TryInlandPlacement(point.x,point.y,exclusions,out var position)) continue;
-                    float yaw = Mathf.Atan2(directions[wall].x,directions[wall].y)*Mathf.Rad2Deg;
+                    var position = run[i];
                     var rotation = Quaternion.Euler(0,yaw+(i%2==0 ? 5 : -5),0);
                     AddInlandPart(wallParts,blocks,position+Vector3.up*.13f,rotation,new Vector3(.72f,.68f,.91f));
                     AddInlandPart(wallParts,blocks,position+Vector3.up*(i%3==0 ? .47f : .39f),
                         Quaternion.Euler(0,yaw+180,0),new Vector3(.63f,.48f,.83f));
                 }
-                if (wallParts.Count > before) wallSections++;
+                wallSections++;
             }
             AddInlandBatch("V40_InlandWindMeadow",grassParts,grassMaterial);
             AddInlandBatch("V40_InlandWildflowers",flowerParts,flowerMaterial);
@@ -457,6 +462,39 @@ namespace Deepsea
             Destroy(blocks);
             inlandScenery.gameObject.SetActive(false);
             Debug.Log($"V40_INLAND_READY grass={grassParts.Count} flowers={flowerParts.Count} wallSections={wallSections} batches={inlandScenery.childCount}");
+        }
+
+        List<Vector3> FindTerraceRun(Vector2 start, Vector2 direction, List<Bounds> exclusions)
+        {
+            const int blockCount = 9;
+            var best = new List<Vector3>(blockCount);
+            var run = new List<Vector3>(blockCount);
+            for (int zShift = -3; zShift <= 3; zShift++)
+            for (int xShift = 0; xShift <= 20; xShift++)
+            {
+                float shift = ((xShift+1)/2)*(xShift%2==0 ? -1.25f : 1.25f);
+                var anchor = start + new Vector2(shift,zShift);
+                run.Clear();
+                for (int i = 0; i < blockCount; i++)
+                {
+                    var point = anchor+direction*(i*.76f);
+                    if (!TryInlandPlacement(point.x,point.y,exclusions,out var position))
+                    {
+                        run.Clear();
+                        continue;
+                    }
+                    if (run.Count>0 && Mathf.Abs(run[run.Count-1].y-position.y)>.33f)
+                        run.Clear();
+                    run.Add(position);
+                    if (run.Count>best.Count)
+                    {
+                        best.Clear();
+                        best.AddRange(run);
+                        if (best.Count==blockCount) return best;
+                    }
+                }
+            }
+            return best;
         }
 
         Material MakeMeadowMaterial(Shader shader, string label, float sway)
