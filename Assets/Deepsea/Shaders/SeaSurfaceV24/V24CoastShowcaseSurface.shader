@@ -25,10 +25,24 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
     half4 _CoastMistV37;
     struct A{float4 p:POSITION;float3 n:NORMAL;float4 t:TANGENT;float2 uv:TEXCOORD0;half4 c:COLOR;UNITY_VERTEX_INPUT_INSTANCE_ID};
     struct V{float4 p:SV_POSITION;float3 w:TEXCOORD0;float3 n:TEXCOORD1;float4 t:TEXCOORD2;float2 uv:TEXCOORD3;half4 c:COLOR;UNITY_VERTEX_INPUT_INSTANCE_ID};
+    static const half3 VelvetRoot = half3(.18,.44,.19);
+
+    half3 VelvetLight(float3 n, Light sun){
+      half3 daylight=lerp(half3(.98,.96,.88),sun.color,.65);
+      return half3(.34,.44,.46)+daylight*saturate(dot(n,sun.direction)*.55+.45)*.57;
+    }
+
     V Vert(A a){
       V o;UNITY_SETUP_INSTANCE_ID(a);UNITY_TRANSFER_INSTANCE_ID(a,o);
       o.w=TransformObjectToWorld(a.p.xyz);
-      if (_Sway != 0) {
+      o.uv=a.uv;
+      if(abs(_Mode-9)<.1){
+        float phase=_Time.y*2.4-(o.w.x*.34+o.w.z*.26);
+        float gust=sin(phase)*.68+cos(phase*1.85+o.w.z*.42)*.32;
+        float sway=gust*_Sway*a.c.a;
+        o.w+=float3(sway,-abs(sway)*.16,sway*.65);
+        o.uv.y=saturate(gust*.48+.48)*a.c.a;
+      } else if (_Sway != 0) {
         float amplitude = _Sway * a.c.a;
         if (_CoastAtmosphereV37.w > 0 && _Sway > 0) {
           float major = sin(_Time.y*1.45+o.w.x*.75+o.w.z*.42);
@@ -47,7 +61,7 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
       o.p=TransformWorldToHClip(o.w);
       o.n=TransformObjectToWorldNormal(a.n);
       o.t=float4(TransformObjectToWorldDir(a.t.xyz),a.t.w*GetOddNegativeScale());
-      o.uv=a.uv;o.c=a.c;
+      o.c=a.c;
       return o;
     }
     half4 Base(V i,float3 weight,float3 uv,float3 dx,float3 dy){
@@ -85,6 +99,14 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
     #pragma multi_compile_fragment _ _SHADOWS_SOFT
     half4 Frag(V i):SV_Target{
       UNITY_SETUP_INSTANCE_ID(i);
+      [branch] if(abs(_Mode-9)<.1){
+        Light daylight=GetMainLight();
+        half3 grass=i.c.rgb*_BaseColor.rgb*VelvetLight(normalize(i.n),daylight);
+        grass+=daylight.color*half3(.10,.15,.09)*(i.uv.y*i.uv.y);
+        float along=TransformWorldToView(_CoastAtmosphereV37.xyz).z-TransformWorldToView(i.w).z;
+        float fog=smoothstep(22,82,along)*_CoastMistV37.a*.65*step(.01,_CoastAtmosphereV37.w);
+        return half4(lerp(grass,_CoastMistV37.rgb,fog),1);
+      }
       float depth=-.22-i.w.y;
       float budget=smoothstep(.25,.85,depth)*_OceanV24UnderLOD*((_Mode<1.5||(_Mode>4.5&&_Mode<7.5))?1:0);
       if(_CoastAtmosphereV37.w>0 && _ShowcaseClay<.5 && _Mode<1.5)
@@ -92,6 +114,13 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
       budget*=step(-.22,_WorldSpaceCameraPos.y);
       ClipLeaf(i);
       float3 n=normalize(i.n),geom=n,weight=pow(abs(n),4);weight/=max(.001,dot(weight,1));
+      bool velvetGround=_Mode>.5 && _Mode<1.5 && _CoastV40Presentation>.5 && _ShowcaseClay<.5;
+      float velvetWeight=velvetGround ? smoothstep(.12,.45,i.c.r)*smoothstep(.48,.66,geom.y) : 0;
+      [branch] if(velvetWeight>.999){
+        float along=TransformWorldToView(_CoastAtmosphereV37.xyz).z-TransformWorldToView(i.w).z;
+        float fog=smoothstep(22,82,along)*_CoastMistV37.a*.65*step(.01,_CoastAtmosphereV37.w);
+        return half4(lerp(VelvetRoot*VelvetLight(geom,GetMainLight()),_CoastMistV37.rgb,fog),1);
+      }
       float3 baseUV=i.w*_Scale;
       half3 baseAlbedo=Base(i,weight,baseUV,ddx(baseUV),ddy(baseUV)).rgb*_BaseColor.rgb;
       float sand=_Mode>.5 && _Mode<1.5 ? smoothstep(.50,.91,geom.y)*(1-saturate(i.c.r)) : 0;
@@ -116,7 +145,11 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
       if(_Mode<1.5){
         float patch=.5+.22*sin(i.w.x*.37+sin(i.w.z*.24)*2)+.18*sin(i.w.z*.54-i.w.x*.21);
         float land=smoothstep(.1,.8,i.w.y),moss=smoothstep(.42,.88,geom.y)*land*smoothstep(.30,.72,patch);
-        half3 cover=SAMPLE_TEXTURE2D(_CoverMap,sampler_CoverMap,i.w.xz*.31).rgb;cover=lerp(dot(cover,half3(.299,.587,.114)).xxx,cover,coastV38 ? .28 : .25)*(coastV38 ? half3(.34,.45,.23) : half3(.32,.42,.21));
+        half3 cover=VelvetRoot;
+        [branch] if(!velvetGround){
+          cover=SAMPLE_TEXTURE2D(_CoverMap,sampler_CoverMap,i.w.xz*.31).rgb;
+          cover=lerp(dot(cover,half3(.299,.587,.114)).xxx,cover,coastV38 ? .28 : .25)*(coastV38 ? half3(.34,.45,.23) : half3(.32,.42,.21));
+        }
         albedo=lerp(albedo,cover,moss*.65);
         if(_Mode>.5){
           sandV37=sand;
@@ -255,6 +288,11 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
         c+=sun.color*half3(1.06,.95,.78)*(wetSand*reflectedSun*sunMask*(.30+fresnel));
       }
       if(budget>0)c=lerp(c,OceanLow(geom,baseAlbedo,sandSample,sand,depth,sun),budget);
+      if(velvetWeight>0){
+        float along=TransformWorldToView(_CoastAtmosphereV37.xyz).z-TransformWorldToView(i.w).z;
+        float fog=smoothstep(22,82,along)*_CoastMistV37.a*.65*step(.01,_CoastAtmosphereV37.w);
+        c=lerp(c,lerp(VelvetRoot*VelvetLight(geom,sun),_CoastMistV37.rgb,fog),velvetWeight);
+      }
       return half4(c,1);
     }
     ENDHLSL

@@ -1,24 +1,28 @@
-# 归潮湾 v40.1 · 船舱水面修复
+# 归潮湾 v42 · 丝绒草毯与粉白花坡
 
-Windows 程序位于 `Builds/SeaAtmosphereV37/Guichao-SeaAtmosphereV37.exe`。桌面入口为「深海灯塔—最新版」。
+桌面入口为「深海灯塔—最新版」。Windows 构建输出位于 Builds/SeaAtmosphereV37/Guichao-SeaAtmosphereV37.exe。
 
-- 依船模实际截面调整船舱遮罩。水面位置和相机深度重建的不透明表面位置都参与判断，近船折射也会避开船模。水面泡沫和历史尾迹共用遮罩。
-- 船头、中部和船尾采样同一波场。两端的抬升按船身当前俯仰计算，横摇继续采样左右舷。
-- 深水横侧、船首斜侧和推进近景里没有发现海水或泡沫覆盖舱内木板。低角度下船底外侧仍可见一条浅色细边。
+- 村落所在海岬按 0.48 米网格铺设 3D 草毯，复用现有地形的草地权重，根部贴合可见地形。保留沙滩、陡坡、村屋和步道的留白。
+- 草叶与粉白花瓣共享一份网格和免贴图、免阴影采样的着色路径。实机生成 8163 个铺设格、6027 朵花，共 146013 个三角面。海风从草根到草尖递增。
+- 隐藏 180 个旧松树、地被合批和潮间带芦苇渲染器。红枫继续使用贴地接触阴影，镜头跟随船只时取消附加实时树影，并按位移和视角变化刷新对焦。
+- v40.1 的船舱遮罩和船体三点浮力通过回归检查。原版光照对照和 v40.1 的交付记录可从仓库历史查看。
 
-## 1080p 实机验证
+## 1080p Windows 验收
 
-Intel Arc 130T，航行和建造分别预热 60 帧，再采样 480 帧。v40 使用同一台机器在本轮复测。
+Intel Arc 130T，预热 60 帧，各采样 480 帧。动态航行段持续推进和转向，采样内行驶 19.9 米并改变航向 34.5°。
 
-| 模式 | v40 平均帧率 | v40.1 平均帧率 | v40.1 P95 帧时间 |
-| --- | ---: | ---: | ---: |
-| 航行 | 93.14 FPS | 92.68 FPS | 11.63 ms |
-| 建造 | 93.48 FPS | 93.17 FPS | 11.48 ms |
+| 场景 | 平均帧率 | P95 帧时间 |
+| --- | ---: | ---: |
+| 动态航行 | 105.25 FPS | 10.45 ms |
+| 航行机位短测 | 98.65 FPS | 11.15 ms |
+| 建造机位短测 | 107.52 FPS | 10.37 ms |
 
-`village-v31-review12` 通过 298 项检查，含两端浮力、推进尾迹和三张近景检查。[验收结果](result.json) · [v40 同机复测](v40-control-result.json) · [光照数据](atmosphere-result.json)
+上述结果来自指定路线和机位的短测。v40.1 既有记录采用航行机位采样。验收 310 项通过，运行错误及警告均为 0。构建保留 25 项警告。本机此次打包使用 Rebuild-Atmosphere.ps1 -DisableBurst，绕过 Burst 原生插件打包卡住的问题。
+
+[验收报告](result.json) · [动态航行数据](sailing-v42.json) · [光照数据](atmosphere-result.json) · [v40.1 交付](https://github.com/xujiale4869/guichao-bay/tree/77eabb654b2474617e286e3bca78bc84919993f3/Docs/SeaAtmosphereV37)
 
 ## 实机截图
 
-- [深水横侧](05-hull-broadside.jpg) · [船首斜侧](06-hull-bow-quarter.jpg) · [推进与尾迹](07-hull-underway.jpg)
-- [海湾全景](preview.jpg) · [岸边近景](02-wet-shore-and-godrays.jpg)
-- [旧光照全景](00-v361-same-view.jpg) · [旧光照岸边](03-v361-same-shore.jpg) · [v40 渔村草坡](04-inland-village.jpg)
+- [海岬草坡](08-v42-meadow.jpg) · [花毯近景](09-v42-meadow-detail.jpg) · [同机位旧景](11-v42-meadow-baseline.jpg)
+- [动态航行](10-v42-underway.jpg) · [海湾全景](preview.jpg) · [码头和浅滩](02-wet-shore-and-godrays.jpg)
+- [船舱横侧](05-hull-broadside.jpg) · [船首斜侧](06-hull-bow-quarter.jpg) · [推进尾迹](07-hull-underway.jpg)

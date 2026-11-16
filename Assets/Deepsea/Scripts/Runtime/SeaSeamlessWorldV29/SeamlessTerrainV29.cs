@@ -199,6 +199,28 @@ namespace Deepsea
                 + 5.2f * Mathf.Exp(-Mathf.Pow((z - 42f) / 16f, 2f));
         }
 
+        internal float GrassHeightAt(float x, float z)
+        {
+            float height = HeightAt(x,z);
+            if (native != null && native.Probe(x,z,out float visible,out float distance) && distance == 0)
+                height = Mathf.Max(height,visible);
+            return height;
+        }
+
+        internal float GrassWeightAt(float x, float z, float height) =>
+            GrassWeight(x, z, height, ShoreX(z));
+
+        static float GrassWeight(float x, float z, float height, float shoreX)
+        {
+            float aboveSea = height - SeaLifeRuntime.Sea;
+            if (aboveSea < .45f) return 0;
+            float noise = .30f * Mathf.Sin(x * .19f + Mathf.Cos(z * .17f) * 2f)
+                        + .20f * Mathf.Cos(z * .31f - x * .23f);
+            float heightWeight = Mathf.SmoothStep(0,1,Mathf.InverseLerp(.45f,2.35f,aboveSea+noise*.85f));
+            float inlandWeight = Mathf.SmoothStep(0,1,Mathf.InverseLerp(-2,9,shoreX-x+noise*4));
+            return heightWeight * inlandWeight;
+        }
+
         /// <summary>
         /// 构建一体化地形网格，并逐顶点计算生态过渡顶点色：
         /// c.r = 草地/苔藓覆盖度 (0=纯金黄海沙, 0~1=自然斑驳过渡, 1=丰茂内陆草地)
@@ -212,7 +234,6 @@ namespace Deepsea
             var cols = new Color[vCount];
             var tr = new int[nx * nz * 6];
 
-            float sea = SeaLifeRuntime.Sea;
             int k = 0;
             for (int z = 0; z <= nz; z++)
             {
@@ -227,18 +248,7 @@ namespace Deepsea
 
                     if (computeEcoColors)
                     {
-                        // 根据海拔高于海平面的高度 + 离岸内陆距离 + 有机噪声，计算平滑的沙地->草地过渡权重
-                        float heightAboveSea = yy - sea;
-                        float inlandDist = shoreX - xx;
-                        float organicNoise = 0.5f + 0.30f * Mathf.Sin(xx * 0.19f + Mathf.Cos(zz * 0.17f) * 2.0f)
-                                                  + 0.20f * Mathf.Cos(zz * 0.31f - xx * 0.23f);
-
-                        // 水下及潮间带沙滩 (heightAboveSea < 0.45m) 保持 100% 纯正沙滩；
-                        // 从海拔 0.45m 到 2.4m 结合有机噪声自然生长出草坡与苔藓，绝无直线硬边！
-                        float grassWeight = Mathf.SmoothStep(0,1,Mathf.InverseLerp(.45f,2.35f,heightAboveSea+(organicNoise-.5f)*.85f))
-                                          * Mathf.SmoothStep(0,1,Mathf.InverseLerp(-2,9,inlandDist+(organicNoise-.5f)*4));
-                        if(heightAboveSea<.45f)grassWeight=0;
-                        cols[k] = new Color(Mathf.Clamp01(grassWeight), 0f, 0f, 1f);
+                        cols[k] = new Color(GrassWeight(xx,zz,yy,shoreX),0,0,1);
                     }
                     else
                     {

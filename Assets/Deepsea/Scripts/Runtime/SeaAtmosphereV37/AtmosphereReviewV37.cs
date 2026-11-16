@@ -18,6 +18,13 @@ namespace Deepsea
             public bool sameViewFrozenTime, planningKeepsSharpView, nightBeamsOff;
         }
 
+        [Serializable]
+        sealed class SailingEvidenceV42
+        {
+            public int frames;
+            public float averageFps, p95FrameMs, boatTravelMeters, headingChangeDegrees;
+        }
+
         IEnumerator ReviewAtmosphereV37()
         {
             var atmosphere = game.GetComponent<SeaCinematicLightingAndAtmosphereV37>();
@@ -114,6 +121,7 @@ namespace Deepsea
             game.GameplayV34.CycleWatch();
             game.GameplayV34.CycleWatch();
             yield return ReviewHullClearanceV401();
+            yield return ReviewVelvetCarpetV42(atmosphere);
             game.SetWaterReviewAngleV35(oldAngle);
             File.WriteAllText(Path.Combine(evidence,"atmosphere-v37.json"),JsonUtility.ToJson(proof,true));
         }
@@ -150,6 +158,74 @@ namespace Deepsea
             yield return Capture("v401-hull-underway");
             game.DriveInput = Vector2.zero;
             game.PlaceBoat(previousPosition,previousHeading);
+            customSailZoom = previousZoom;
+        }
+
+        IEnumerator ReviewVelvetCarpetV42(SeaCinematicLightingAndAtmosphereV37 atmosphere)
+        {
+            Transform carpet = game.exterior.Find("V40 Inland Scenery/V40_InlandWindMeadow");
+            var renderer = carpet != null ? carpet.GetComponent<MeshRenderer>() : null;
+            Check(renderer != null && renderer.sharedMaterial.GetFloat("_Mode") == 9 &&
+                  renderer.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off &&
+                  carpet.GetComponent<MeshFilter>().sharedMesh.subMeshCount == 1,
+                "v42 grass and flowers share one unshadowed velvet mesh");
+
+            Vector3 previous = game.boat.position;
+            float previousHeading = game.boat.eulerAngles.y;
+            float previousZoom = customSailZoom;
+            customSailZoom = 27f;
+            game.PlaceBoat(new Vector3(8.2f,SeaLifeRuntime.Sea,6.5f),0);
+            game.SetWaterReviewAngleV35(Quaternion.Euler(39,-48,0),customSailZoom);
+            yield return new WaitForSecondsRealtime(.75f);
+            if (carpet != null)
+            {
+                Time.timeScale = 0;
+                atmosphere.PresentForReview(false);
+                Check(!carpet.gameObject.activeInHierarchy && atmosphere.ClutterVisibilityMatches(true),
+                    "v42 baseline restores legacy shore plants and hides the velvet meadow");
+                yield return Capture("v42-meadow-baseline");
+                atmosphere.PresentForReview(true);
+                Check(carpet.gameObject.activeInHierarchy && atmosphere.ClutterVisibilityMatches(false),
+                    "v42 meadow returns and legacy shore clutter is hidden in the presentation view");
+                yield return Capture("v42-meadow");
+                Time.timeScale = 1;
+            }
+
+            var meadow = new Vector3(-32f,GrassHeightAt(-32f,26f),26f);
+            yield return VillageFrameV31("v42-meadow-detail",meadow,9f,43,-57);
+
+            customSailZoom = 21.5f;
+            game.PlaceBoat(new Vector3(11f,SeaLifeRuntime.Sea,-8.5f),350);
+            game.SetWaterReviewAngleV35(Quaternion.Euler(42,-34,0),customSailZoom);
+            game.DriveInput = new Vector2(.14f,1);
+            for (int i = 0; i < 60; i++) yield return new WaitForEndOfFrame();
+
+            var frameMs = new float[480];
+            Vector3 start = game.boat.position;
+            float startHeading = game.boat.eulerAngles.y;
+            float totalMs = 0;
+            for (int i = 0; i < frameMs.Length; i++)
+            {
+                yield return new WaitForEndOfFrame();
+                frameMs[i] = Time.unscaledDeltaTime * 1000;
+                totalMs += frameMs[i];
+            }
+
+            Array.Sort(frameMs);
+            var proof = new SailingEvidenceV42
+            {
+                frames = frameMs.Length,
+                averageFps = 1000 * frameMs.Length / totalMs,
+                p95FrameMs = frameMs[(int)(frameMs.Length*.95f)],
+                boatTravelMeters = Vector3.Distance(start,game.boat.position),
+                headingChangeDegrees = Mathf.Abs(Mathf.DeltaAngle(startHeading,game.boat.eulerAngles.y))
+            };
+            Check(proof.boatTravelMeters > 7 && proof.headingChangeDegrees > 3 && game.Speed > 1.1f,
+                "v42 performance sample includes actual propulsion, steering and a moving camera");
+            File.WriteAllText(Path.Combine(evidence,"sailing-v42.json"),JsonUtility.ToJson(proof,true));
+            yield return Capture("v42-sailing");
+            game.DriveInput = Vector2.zero;
+            game.PlaceBoat(previous,previousHeading);
             customSailZoom = previousZoom;
         }
 
