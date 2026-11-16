@@ -107,6 +107,7 @@ namespace Deepsea
             // 1. 连贯自然的西岸主岛海岸线方程
             float mainShoreX = ShoreX(z);
             float distFromShore = x - mainShoreX;
+            float regrade = HeadlandRegrade(x,z);
 
             // 原版核心微调保护区 (仅在原版精修岸岩正下方 x ∈ [-18, 8], z ∈ [-16, 20] 轻柔避让，绝不切断南北陆地！)
             float corePreserveMask = Mathf.Exp(-Mathf.Pow((x + 5f) / 11f, 4f) - Mathf.Pow((z - 2f) / 15f, 4f));
@@ -120,13 +121,20 @@ namespace Deepsea
             float coastalY;
             if (distFromShore < 0f)
             {
-                // 内陆区域 (x < mainShoreX)：向西持续抬升为饱满的岛屿丘陵与山脊，彻底消除“北侧只有一条细线”！
-                float inlandDist = -distFromShore;
-                float beachToCliff = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(inlandDist / 16.0f));
-                float mountainRise = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((inlandDist - 10.0f) / 65.0f));
-                float hillUndulation = 1.35f * Mathf.Sin(x * 0.045f + z * 0.038f)
-                                     + 0.85f * Mathf.Cos(z * 0.075f - x * 0.052f);
-                coastalY = sea + 0.12f + beachToCliff * 3.4f + mountainRise * 7.8f + hillUndulation * beachToCliff;
+                float inland = -distFromShore;
+                float meadowRise = BiomeRamp(0,15,inland);
+                float hillRise = BiomeRamp(6,52,inland);
+                float headland = Mathf.Exp(-Mathf.Pow((z-2)/22,2));
+                float backSlope = headland * BiomeRamp(1,11,inland) *
+                    (2.25f + 1.95f * BiomeRamp(7,31,inland));
+                float undulation = .85f * Mathf.Sin(x*.045f+z*.038f) +
+                                    .55f * Mathf.Cos(z*.075f-x*.052f);
+                float newSlope = sea + .12f + meadowRise*(3.25f+undulation) + hillRise*8.1f + backSlope;
+                float originalRelief = 1.35f * Mathf.Sin(x*.045f+z*.038f) +
+                                       .85f * Mathf.Cos(z*.075f-x*.052f);
+                float existingSlope = sea + .12f + BiomeRamp(0,16,inland)*(3.4f+originalRelief) +
+                                      BiomeRamp(10,75,inland)*7.8f;
+                coastalY = Mathf.Lerp(existingSlope,newSlope,regrade);
             }
             else
             {
@@ -159,7 +167,7 @@ namespace Deepsea
             float combinedY = Mathf.Max(coastalY, Mathf.Max(outerRidgeY, eastAtollY)) + ripple;
 
             // 温和避让原版内湾核心海床，杜绝陡峭切沟
-            combinedY -= corePreserveMask * 0.55f;
+            combinedY -= corePreserveMask * Mathf.Lerp(1,BiomeRamp(-2,0,distFromShore),regrade) * .55f;
 
             // 外围远海边界 (距离中心 > 130m) 统一平滑归零至 deepAbyss，确保网格边缘与 V29_DeepFloor 100% 齐平无接缝！
             float edgeFadeX = Mathf.SmoothStep(0,1,Mathf.InverseLerp(145,195,x));
@@ -174,20 +182,40 @@ namespace Deepsea
 
         public float HeightAt(float x, float z)
         {
-            float y = BaseArchipelagoHeight(x, z);
-            if (native != null)
+            float height = BaseArchipelagoHeight(x,z);
+            if (native == null || !native.Probe(x,z,out float sampled,out float distance,true))
+                return height;
+
+            float shore = ShoreX(z);
+            float inland = shore-x;
+            float inlandClimb = BiomeRamp(0,7,inland) * HeadlandRegrade(x,z);
+            float core = (1-BiomeRamp(16,36,Mathf.Abs(z-2))) *
+                         (1-BiomeRamp(22,38,Mathf.Abs(x+2)));
+            float legacy = Mathf.Lerp(height,sampled-.09f,core*(1-BiomeRamp(0,12,distance)));
+
+            // Keep the authored harbor and its walkable shore. Further inland the new slope
+            // can carry ground across low samples from the old rock-and-track capture.
+            float backSlope = inlandClimb * BiomeRamp(18.1f,32f,-x);
+            float supported = Mathf.Lerp(legacy,Mathf.Max(legacy,height),backSlope);
+            if (distance > 0 && sampled > SeaLifeRuntime.Sea+.45f)
             {
-                float ny, d;
-                // 仅在原版有真实网格覆盖的核心区内部做双三次平滑融合，彻底取消之前导致北侧断裂的 landMask 阶跃代码！
-                float coreWeight = (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(16f, 36f, Mathf.Abs(z - 2f))))
-                                 * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(22f, 38f, Mathf.Abs(x + 2f))));
-                if (coreWeight > 0.001f && native.Probe(x, z, out ny, out d, true) && d < 12f)
-                {
-                    float blend = (1f - Mathf.SmoothStep(0f, 1f, d / 12f)) * coreWeight;
-                    y = Mathf.Lerp(y, ny - 0.09f, blend);
-                }
+                float falloff = 1-BiomeRamp(0,26,distance);
+                float shoulder = sampled-.09f+distance*.12f;
+                supported = Mathf.Lerp(supported,Mathf.Max(supported,shoulder),
+                    falloff * BiomeRamp(0,3,distance) * inlandClimb * BiomeRamp(18.1f,28f,-x));
             }
-            return y;
+            return supported;
+        }
+
+        static float HeadlandRegrade(float x,float z)
+        {
+            // Feather the new hill into the boatyard and observatory's established approaches.
+            float headland = BiomeRamp(-18,-9,z) * (1-BiomeRamp(27,37,z));
+            // The central tavern sits on the existing inland bench. Preserve its full footing and
+            // blend the grade back into the new slope on all sides.
+            float tavernBench = BiomeRamp(-59,-50,x) * (1-BiomeRamp(-37,-29,x)) *
+                                BiomeRamp(-22,-15,z) * (1-BiomeRamp(-2,7,z));
+            return headland*(1-tavernBench);
         }
 
         float ShoreX(float z)
@@ -207,25 +235,29 @@ namespace Deepsea
             return height;
         }
 
-        internal float GrassWeightAt(float x, float z, float height) =>
-            GrassWeight(x, z, height, ShoreX(z));
+        internal Vector2 CoastBiomeAt(float x,float z,float height) =>
+            CoastBiome(x,z,height,ShoreX(z));
 
-        static float GrassWeight(float x, float z, float height, float shoreX)
+        internal static float BiomeRamp(float start,float end,float value) =>
+            Mathf.SmoothStep(0,1,Mathf.InverseLerp(start,end,value));
+
+        static Vector2 CoastBiome(float x,float z,float height,float shore)
         {
-            float aboveSea = height - SeaLifeRuntime.Sea;
-            if (aboveSea < .45f) return 0;
-            float noise = .30f * Mathf.Sin(x * .19f + Mathf.Cos(z * .17f) * 2f)
-                        + .20f * Mathf.Cos(z * .31f - x * .23f);
-            float heightWeight = Mathf.SmoothStep(0,1,Mathf.InverseLerp(.45f,2.35f,aboveSea+noise*.85f));
-            float inlandWeight = Mathf.SmoothStep(0,1,Mathf.InverseLerp(-2,9,shoreX-x+noise*4));
-            return heightWeight * inlandWeight;
+            float aboveSea = height-SeaLifeRuntime.Sea;
+            float inland = shore-x;
+            if (aboveSea < .45f || inland <= 0) return Vector2.zero;
+            float grassNoise = .32f * Mathf.Sin(x*.17f+Mathf.Cos(z*.15f)*2f) +
+                               .22f * Mathf.Cos(z*.27f-x*.21f);
+            float grass = BiomeRamp(.45f,.72f,aboveSea) *
+                          BiomeRamp(.45f,2.65f,aboveSea+grassNoise*.75f) *
+                          BiomeRamp(0,15,inland+grassNoise*3.8f) * BiomeRamp(0,1,inland);
+            float forestNoise = .28f * Mathf.Sin(x*.14f-z*.16f) + .20f * Mathf.Cos(z*.22f+x*.18f);
+            float forest = BiomeRamp(2.1f,6.4f,aboveSea+forestNoise*.9f) *
+                           BiomeRamp(11,30,inland+forestNoise*4.5f);
+            return new Vector2(grass,forest);
         }
 
-        /// <summary>
-        /// 构建一体化地形网格，并逐顶点计算生态过渡顶点色：
-        /// c.r = 草地/苔藓覆盖度 (0=纯金黄海沙, 0~1=自然斑驳过渡, 1=丰茂内陆草地)
-        /// 彻底解决“一边沙地直接变成草地”的硬切问题！
-        /// </summary>
+        // The visible terrain and the inland grass use the same red and green biome channels.
         Mesh GridMeshWithColors(string name, float minX, float maxX, float minZ, float maxZ, int nx, int nz, Func<float, float, float> heightFn, bool computeEcoColors)
         {
             int vCount = (nx + 1) * (nz + 1);
@@ -248,7 +280,8 @@ namespace Deepsea
 
                     if (computeEcoColors)
                     {
-                        cols[k] = new Color(GrassWeight(xx,zz,yy,shoreX),0,0,1);
+                        Vector2 biome = CoastBiome(xx,zz,yy,shoreX);
+                        cols[k] = new Color(biome.x,biome.y,0,1);
                     }
                     else
                     {

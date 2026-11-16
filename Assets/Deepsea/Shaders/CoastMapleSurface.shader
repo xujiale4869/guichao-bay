@@ -73,17 +73,19 @@ half4 Frag(V i):SV_Target {
  float air=smoothstep(-.85,.28,-depth);
  float refinement = _ShowcaseClay<.5 && (rock || foliage) ? _CoastAtmosphereV37.w*air : 0;
  float stoneRelief = rock && _ShowcaseClay<.5 ? _CoastV40Presentation*smoothstep(-.5,.18,i.w.y) : 0;
- half4 tex=Base(i,weight);half3 albedo=tex.rgb*_BaseColor.rgb;if(abs(_Mode-4)<.1)albedo*=i.c.rgb;float rough=_Roughness,ao=1;
+ half4 tex=Base(i,weight);
+ if(rock) tex.rgb=lerp(tex.rgb,lerp(half3(.43,.38,.30),tex.rgb,.68),stoneRelief);
+ half3 albedo=tex.rgb*_BaseColor.rgb;if(abs(_Mode-4)<.1)albedo*=i.c.rgb;float rough=_Roughness,ao=1;
  float2 uv=i.uv;if(_Mode<1.5)uv=(weight.x>weight.y&&weight.x>weight.z?i.w.zy:weight.y>weight.z?i.w.xz:i.w.xy)*_Scale;
  // 提高 ARM 贴图的最低 AO 下限 (从 .65 提至 .86)，彻底消除红枫下大礁石与前景礁石的死黑裂缝条带！
- if(_UseMask>.5){half3 arm=SAMPLE_TEXTURE2D(_MaskMap,sampler_MaskMap,uv).rgb;ao=lerp(lerp(lerp(.65,.86,refinement),.94,stoneRelief),1,arm.r);rough=lerp(arm.g,.76,stoneRelief*.55);}
+ if(_UseMask>.5){half3 arm=SAMPLE_TEXTURE2D(_MaskMap,sampler_MaskMap,uv).rgb;ao=lerp(lerp(lerp(.65,.86,refinement),.80,stoneRelief),1,arm.r);rough=lerp(arm.g,.76,stoneRelief*.55);}
  if(_NormalStrength>.01){
   float3 b=UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap,sampler_BumpMap,uv));
   float3 bump;if(_Mode<1.5)bump=weight.x>weight.y&&weight.x>weight.z?float3(sign(n.x)*b.z,b.y,b.x):weight.y>weight.z?float3(b.x,sign(n.y)*b.z,b.y):float3(b.x,b.y,sign(n.z)*b.z);
   else{float3 tangent=normalize(i.t.xyz);bump=tangent*b.x+cross(n,tangent)*i.t.w*b.y+n*b.z;}
   // 对岩石降低裂隙法线黑度，保持温润手绘块面感
   float normStr = _NormalStrength * (rock ? lerp(1,.55,refinement) : 1);
-  normStr *= lerp(1,.46,stoneRelief);
+  normStr *= lerp(1,.82,stoneRelief);
   n=normalize(lerp(n,bump,normStr));
  }
  if(rock && refinement>0){
@@ -121,7 +123,7 @@ half4 Frag(V i):SV_Target {
   albedo=lerp(originalAlbedo,albedo,refinement);
   // Lift the dark values of the scanned stone while retaining its lighter grain and lichen.
   float lift=(1-smoothstep(.10,.46,dot(albedo,half3(.299,.587,.114))))*stoneRelief;
-  albedo=lerp(albedo,max(albedo,half3(.44,.43,.38)),lift*.82);
+  albedo=lerp(albedo,max(albedo,half3(.33,.30,.25)),lift*.48);
  }
 
  if(foliage && refinement>0){

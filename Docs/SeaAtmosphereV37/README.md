@@ -1,28 +1,27 @@
-# 归潮湾 v42 · 丝绒草毯与粉白花坡
+# 归潮湾 v43 · 海岬地形与红枫林
 
 桌面入口为「深海灯塔—最新版」。Windows 构建输出位于 Builds/SeaAtmosphereV37/Guichao-SeaAtmosphereV37.exe。
 
-- 村落所在海岬按 0.48 米网格铺设 3D 草毯，复用现有地形的草地权重，根部贴合可见地形。保留沙滩、陡坡、村屋和步道的留白。
-- 草叶与粉白花瓣共享一份网格和免贴图、免阴影采样的着色路径。实机生成 8163 个铺设格、6027 朵花，共 146013 个三角面。海风从草根到草尖递增。
-- 隐藏 180 个旧松树、地被合批和潮间带芦苇渲染器。红枫继续使用贴地接触阴影，镜头跟随船只时取消附加实时树影，并按位移和视角变化刷新对焦。
-- v40.1 的船舱遮罩和船体三点浮力通过回归检查。原版光照对照和 v40.1 的交付记录可从仓库历史查看。
+- 抬高灯塔海岬背后的低槽，在坡面向内陆延伸时逐步过渡到山脊。中央海湾原生高度验收和海侧地形保留。
+- 沙滩、低矮沙生草、草甸和林下腐殖土共用地形权重。撤下 v42 粉白花坡，改为暖杏沙、橄榄绿和落叶赭色，并恢复暖砂岩的纹理对比。
+- 实机生成沙草 150 格、草甸 3470 格和林下草 2804 格。草地共用 79260 个三角面的一份网格。山坡使用原有树干和红枫叶网格新增 16 棵红枫，四片空间分区按材质合批，新增树冠使用约三分之一的原生叶卡，并烘成一份贴地接触阴影网格。
 
 ## 1080p Windows 验收
 
-Intel Arc 130T，预热 60 帧，各采样 480 帧。动态航行段持续推进和转向，采样内行驶 19.9 米并改变航向 34.5°。
+Intel Arc 130T，预热 60 帧，各采样 480 帧。动态航行时持续推进和转向，采样内行驶 21.0 米、转向 35.9°。
 
 | 场景 | 平均帧率 | P95 帧时间 |
 | --- | ---: | ---: |
-| 动态航行 | 105.25 FPS | 10.45 ms |
-| 航行机位短测 | 98.65 FPS | 11.15 ms |
-| 建造机位短测 | 107.52 FPS | 10.37 ms |
+| 动态航行 | 101.10 FPS | 10.82 ms |
+| 航行机位短测 | 94.74 FPS | 11.59 ms |
+| 建造机位短测 | 96.17 FPS | 11.41 ms |
 
-上述结果来自指定路线和机位的短测。v40.1 既有记录采用航行机位采样。验收 310 项通过，运行错误及警告均为 0。构建保留 25 项警告。本机此次打包使用 Rebuild-Atmosphere.ps1 -DisableBurst，绕过 Burst 原生插件打包卡住的问题。
+315 项检查通过。构建有 25 项警告。本机使用 Rebuild-Atmosphere.ps1 -DisableBurst 构建。性能数字对应本次指定路线和机位。
 
-[验收报告](result.json) · [动态航行数据](sailing-v42.json) · [光照数据](atmosphere-result.json) · [v40.1 交付](https://github.com/xujiale4869/guichao-bay/tree/77eabb654b2474617e286e3bca78bc84919993f3/Docs/SeaAtmosphereV37)
+[验收报告](result.json) · [动态航行数据](sailing-v43.json) · [光照数据](atmosphere-result.json) · [v42 记录](https://github.com/xujiale4869/guichao-bay/tree/5b2fcf0fc0cbf07d94855f55244401269c3a0566/Docs/SeaAtmosphereV37)
 
 ## 实机截图
 
-- [海岬草坡](08-v42-meadow.jpg) · [花毯近景](09-v42-meadow-detail.jpg) · [同机位旧景](11-v42-meadow-baseline.jpg)
-- [动态航行](10-v42-underway.jpg) · [海湾全景](preview.jpg) · [码头和浅滩](02-wet-shore-and-godrays.jpg)
+- [沙滩与草甸](12-v43-coast-biomes.jpg) · [海岬坡面](14-v43-headland-profile.jpg) · [红枫林近景](13-v43-upland-grove.jpg)
+- [动态航行](15-v43-sailing.jpg) · [v42 同机位](08-v42-meadow.jpg) · [v43 同机位旧光照](16-v43-coast-baseline.jpg)
 - [船舱横侧](05-hull-broadside.jpg) · [船首斜侧](06-hull-bow-quarter.jpg) · [推进尾迹](07-hull-underway.jpg)

@@ -1,6 +1,6 @@
 # 深海灯塔当前工程
 
-当前最新版为 v42。按地形草地权重铺设 3D 丝绒草毯和粉白花坡。1080p 动态航行平均 105.25 FPS，实机证据见 Docs/SeaAtmosphereV37。
+当前最新版为 v43。填平海岬后缘低槽，更新沙滩至红枫林生态过渡。1080p 实机动态航行平均 101.10 FPS，证据见 Docs/SeaAtmosphereV37。
 
 历史海岸美术版本：v11，2026-10-23 完成独立程序验收。主要分析与制作记录在 `C:/Users/许嘉乐/Documents/ChatGPT/深海灯塔/art-v11/reference-analysis.md`，项目内副本见 `Docs/原图对照与美术推进-v11.md`。
 

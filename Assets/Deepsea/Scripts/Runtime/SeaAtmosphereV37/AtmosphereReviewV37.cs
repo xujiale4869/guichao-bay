@@ -19,7 +19,7 @@ namespace Deepsea
         }
 
         [Serializable]
-        sealed class SailingEvidenceV42
+        sealed class SailingEvidenceV43
         {
             public int frames;
             public float averageFps, p95FrameMs, boatTravelMeters, headingChangeDegrees;
@@ -121,7 +121,7 @@ namespace Deepsea
             game.GameplayV34.CycleWatch();
             game.GameplayV34.CycleWatch();
             yield return ReviewHullClearanceV401();
-            yield return ReviewVelvetCarpetV42(atmosphere);
+            yield return ReviewCoastalBiomeV43(atmosphere);
             game.SetWaterReviewAngleV35(oldAngle);
             File.WriteAllText(Path.Combine(evidence,"atmosphere-v37.json"),JsonUtility.ToJson(proof,true));
         }
@@ -161,14 +161,36 @@ namespace Deepsea
             customSailZoom = previousZoom;
         }
 
-        IEnumerator ReviewVelvetCarpetV42(SeaCinematicLightingAndAtmosphereV37 atmosphere)
+        IEnumerator ReviewCoastalBiomeV43(SeaCinematicLightingAndAtmosphereV37 atmosphere)
         {
             Transform carpet = game.exterior.Find("V40 Inland Scenery/V40_InlandWindMeadow");
             var renderer = carpet != null ? carpet.GetComponent<MeshRenderer>() : null;
             Check(renderer != null && renderer.sharedMaterial.GetFloat("_Mode") == 9 &&
                   renderer.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off &&
                   carpet.GetComponent<MeshFilter>().sharedMesh.subMeshCount == 1,
-                "v42 grass and flowers share one unshadowed velvet mesh");
+                "v43 coastal grass shares one unshadowed draw mesh");
+
+            var shelf = worldRoot.Find("V29_ContinuousContinentalShelf").GetComponent<MeshFilter>().sharedMesh;
+            var colors = shelf.colors;
+            var vertices = shelf.vertices;
+            int shorePlants = 0, meadow = 0, undergrowth = 0;
+            bool dryBiomes = true;
+            for (int i = 0; i < colors.Length; i++)
+            {
+                if (vertices[i].y < SeaLifeRuntime.Sea+.45f)
+                    dryBiomes &= colors[i].r == 0 && colors[i].g == 0;
+                if (colors[i].r > .12f && colors[i].r < .55f) shorePlants++;
+                if (colors[i].r > .68f && colors[i].g < .28f) meadow++;
+                if (colors[i].g > .68f) undergrowth++;
+            }
+            Check(shorePlants > 100 && meadow > 100 && undergrowth > 100 && dryBiomes,
+                "v43 terrain blends dune grass, meadow and upland leaf litter above the tidal zone");
+            Check(atmosphere.UplandMapleCount == 16,"v43 sixteen upland maples are planted using the existing maple meshes");
+
+            int climbingProfiles = 0;
+            for (int z = -16; z <= 24; z+=4)
+                if (HeightAt(-46,z) > HeightAt(-24,z)+1.25f) climbingProfiles++;
+            Check(climbingProfiles >= 9,"v43 the upland ridge rises above the headland across the central coast");
 
             Vector3 previous = game.boat.position;
             float previousHeading = game.boat.eulerAngles.y;
@@ -182,17 +204,19 @@ namespace Deepsea
                 Time.timeScale = 0;
                 atmosphere.PresentForReview(false);
                 Check(!carpet.gameObject.activeInHierarchy && atmosphere.ClutterVisibilityMatches(true),
-                    "v42 baseline restores legacy shore plants and hides the velvet meadow");
-                yield return Capture("v42-meadow-baseline");
+                    "v43 baseline restores legacy shore plants and hides coastal grass and upland groves");
+                yield return Capture("v43-coast-baseline");
                 atmosphere.PresentForReview(true);
                 Check(carpet.gameObject.activeInHierarchy && atmosphere.ClutterVisibilityMatches(false),
-                    "v42 meadow returns and legacy shore clutter is hidden in the presentation view");
-                yield return Capture("v42-meadow");
+                    "v43 presentation restores the new grass and upland groves and hides legacy shore clutter");
+                yield return Capture("v43-coast-biomes");
                 Time.timeScale = 1;
             }
 
-            var meadow = new Vector3(-32f,GrassHeightAt(-32f,26f),26f);
-            yield return VillageFrameV31("v42-meadow-detail",meadow,9f,43,-57);
+            var grove = new Vector3(-33f,GrassHeightAt(-33f,21f),21f);
+            yield return VillageFrameV31("v43-upland-grove",grove,12f,40,-57);
+            var profile = new Vector3(-24f,GrassHeightAt(-24f,8f),8f);
+            yield return VillageFrameV31("v43-headland-profile",profile,25f,32,-10);
 
             customSailZoom = 21.5f;
             game.PlaceBoat(new Vector3(11f,SeaLifeRuntime.Sea,-8.5f),350);
@@ -212,7 +236,7 @@ namespace Deepsea
             }
 
             Array.Sort(frameMs);
-            var proof = new SailingEvidenceV42
+            var proof = new SailingEvidenceV43
             {
                 frames = frameMs.Length,
                 averageFps = 1000 * frameMs.Length / totalMs,
@@ -221,9 +245,9 @@ namespace Deepsea
                 headingChangeDegrees = Mathf.Abs(Mathf.DeltaAngle(startHeading,game.boat.eulerAngles.y))
             };
             Check(proof.boatTravelMeters > 7 && proof.headingChangeDegrees > 3 && game.Speed > 1.1f,
-                "v42 performance sample includes actual propulsion, steering and a moving camera");
-            File.WriteAllText(Path.Combine(evidence,"sailing-v42.json"),JsonUtility.ToJson(proof,true));
-            yield return Capture("v42-sailing");
+                "v43 performance sample includes actual propulsion, steering and a moving camera");
+            File.WriteAllText(Path.Combine(evidence,"sailing-v43.json"),JsonUtility.ToJson(proof,true));
+            yield return Capture("v43-sailing");
             game.DriveInput = Vector2.zero;
             game.PlaceBoat(previous,previousHeading);
             customSailZoom = previousZoom;
