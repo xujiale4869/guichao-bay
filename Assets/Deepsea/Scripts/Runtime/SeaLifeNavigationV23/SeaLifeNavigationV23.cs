@@ -14,7 +14,9 @@ namespace Deepsea {
   public float EmissionSpeed {get;private set;}
   public int WakeCount {get{return points.Count;}}
   public float WakeLifetime=5.5f;
+  internal const float HarborSupportDistance = 1.65f;
   SeaLifeRuntime game;MeshRenderer surface,wakeRenderer;Material oldWater,newWater,wakeMaterial;
+  Shader harborWaterShader;
   Transform visual;Mesh wakeMesh;Vector3 previousBoat;float previousSpeed,lastEmission;
   CoastMapleLeaves oldLeaves;Mesh leafMesh,leafRipple;Material leafMaterial,leafRippleMaterial;
   readonly Matrix4x4[] leafMatrices=new Matrix4x4[30];MaterialPropertyBlock leafBlock;
@@ -29,6 +31,7 @@ namespace Deepsea {
   IEnumerator Start(){
    game=GetComponent<SeaLifeRuntime>();while(game==null||!game.Ready)yield return null;
    surface=game.world.Find("ShowcaseWater").GetComponent<MeshRenderer>();
+   harborWaterShader=Shader.Find("Deepsea/SeaSurfaceSparkleHarborV27");
    oldWater=new Material(Resources.Load<Material>("SeaLifeWaterV22/Water"));newWater=new Material(Resources.Load<Material>("SeaLifeNavigationV23/Water"));surface.sharedMaterial=newWater;
    visual=new GameObject("船身随波 · 视觉层").transform;visual.SetParent(game.boat,false);
    foreach(var child in game.boat.Cast<Transform>().ToArray())if(child!=visual)child.SetParent(visual,true);
@@ -54,12 +57,40 @@ namespace Deepsea {
    {
     Shader.SetGlobalVector("_CoastBoat",new Vector4(p.x,p.z,Mathf.Abs(along),(!game.OnFoot&&!game.Busy)?1:0));
     float flowSign=along<-.12f?-1:1;Shader.SetGlobalVector("_CoastBoatHeading",new Vector4(game.boat.forward.x*flowSign,game.boat.forward.z*flowSign,0,0));
-    var n=HullNormal(p);var localN=Quaternion.Inverse(game.boat.rotation)*n;float accel=Time.deltaTime>.0001f?(along-previousSpeed)/Time.deltaTime:0;
-    visual.localPosition=new Vector3(0,(Height(p)-SeaLifeRuntime.Sea)/game.boat.lossyScale.y,0);
-    var tilt=Quaternion.FromToRotation(Vector3.up,localN)*Quaternion.Euler(-Mathf.Clamp(accel*.8f,-2.1f,2.1f),0,-Mathf.Clamp(yawRate*along*.025f,-3.5f,3.5f));
-    visual.localRotation=Quaternion.Slerp(visual.localRotation,tilt,1-Mathf.Exp(-4*Time.deltaTime));
+    UpdateHullVisual(p,along);
    }
    previousSpeed=along;UpdateWake(p);game.FollowWaterV23(this);DrawLeaves();
+  }
+  void UpdateHullVisual(Vector3 position,float along){
+   float center=Height(position);
+   var material=surface.sharedMaterial;
+   bool harbor=harborWaterShader!=null&&material!=null&&material.shader==harborWaterShader;
+   float bow=0,stern=0;
+   Vector3 normal;
+   if(harbor){
+    Vector3 forward=game.boat.forward,right=game.boat.right;
+    bow=Height(position+forward*HarborSupportDistance);
+    stern=Height(position-forward*HarborSupportDistance);
+    float pitch=(bow-stern)/(2*HarborSupportDistance);
+    float roll=(Height(position+right*.75f)-Height(position-right*.75f))/1.5f;
+    normal=(Vector3.up-forward*pitch-right*roll).normalized;
+   }else{
+    normal=HullNormal(position);
+   }
+   Vector3 localNormal=Quaternion.Inverse(game.boat.rotation)*normal;
+   float acceleration=Time.deltaTime>.0001f?(along-previousSpeed)/Time.deltaTime:0;
+   var tilt=Quaternion.FromToRotation(Vector3.up,localNormal)*
+    Quaternion.Euler(-Mathf.Clamp(acceleration*.8f,-2.1f,2.1f),0,-Mathf.Clamp(yawRate*along*.025f,-3.5f,3.5f));
+   visual.localRotation=Quaternion.Slerp(visual.localRotation,tilt,1-Mathf.Exp(-4*Time.deltaTime));
+
+   float height=center;
+   if(harbor){
+    // Account for the applied pitch before lifting either end of the visual hull.
+    float pitchOffset=visual.forward.y*HarborSupportDistance;
+    float supportedEnds=Mathf.Max(bow-pitchOffset,stern+pitchOffset);
+    height=Mathf.Max(center,Mathf.Max((center+bow+stern)/3f,supportedEnds-.04f))+.06f;
+   }
+   visual.localPosition=new Vector3(0,(height-SeaLifeRuntime.Sea)/game.boat.lossyScale.y,0);
   }
   void UpdateWake(Vector3 p){
    if((p-previousBoat).sqrMagnitude>16)points.Clear();previousBoat=p;

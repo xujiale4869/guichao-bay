@@ -95,18 +95,9 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
             float _CoastWaterDepthProbe;
             float _CoastWaterDetails;
             float _OceanV24Layer;
-            float4 _CoastBoat;
             float4 _CoastBoatHeading;
             float4 _CoastAtmosphereV37;
-            float _CoastV40Presentation;
-            float4x4 _CoastV40HullWorldToLocal;
-
-            float CabinOutline(float3 worldPosition)
-            {
-                float3 local = mul(_CoastV40HullWorldToLocal, float4(worldPosition, 1.0)).xyz;
-                float2 offset = float2(local.x / 0.45, (local.z - 0.03) / 1.12);
-                return dot(offset, offset);
-            }
+            #include "HarborBoatCabinV401.hlsl"
 
             #include "../HarborLightingV27.hlsl"
             struct Attributes
@@ -143,10 +134,11 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 float3 waveOffset = EvaluateBayWaves(world.xz, t, wNormal, wCrest);
                 world += waveOffset;
                 float2 boatDelta = world.xz - _CoastBoat.xy;
-                [branch] if (_CoastV40Presentation > 0.5 && dot(boatDelta, boatDelta) < 9.0)
+                [branch] if (_CoastV40Presentation > 0.5 && dot(boatDelta, boatDelta) < 25.0)
                 {
-                    float depression = 1.0 - smoothstep(0.48, 1.65, CabinOutline(world));
-                    world.y -= (0.25 + max(waveOffset.y, 0.0) * 0.75) * depression;
+                    float3 local = HarborCabinLocal(world);
+                    float depression = 1.0 - smoothstep(0.68, 1.40, HarborCabinOutline(local));
+                    world.y -= (0.34 + max(waveOffset.y, 0.0) * 0.85) * depression;
                 }
 
                 o.worldPos   = world;
@@ -157,29 +149,25 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 return o;
             }
 
-            float DeviceDepthForWorldPosition(float depth)
-            {
-                #if !UNITY_REVERSED_Z
-                depth = lerp(UNITY_NEAR_CLIP_VALUE, 1.0, depth);
-                #endif
-                return depth;
-            }
-
             half4 Frag(Varyings i) : SV_Target
             {
                 float2 boatDelta = i.worldPos.xz - _CoastBoat.xy;
                 float boatDistSq = dot(boatDelta, boatDelta);
-                [branch] if (_CoastV40Presentation > 0.5 && boatDistSq < 9.0)
-                    clip(CabinOutline(i.worldPos) - 0.88);
 
                 float2 screenUV = GetNormalizedScreenSpaceUV(i.positionCS);
                 float rawDepth = SampleSceneDepth(screenUV);
-                float3 bottomWS = ComputeWorldSpacePosition(screenUV, DeviceDepthForWorldPosition(rawDepth), UNITY_MATRIX_I_VP);
+                float3 bottomWS = ComputeWorldSpacePosition(screenUV, HarborDepthNDC(rawDepth), UNITY_MATRIX_I_VP);
                 float waterDepth = max(0.0, i.worldPos.y - bottomWS.y);
 
                 if (_CoastWaterDepthProbe > 0.5)
                     return half4(saturate(waterDepth / 25.0), 0, 0, 1);
 
+                float cabinMask = 99.0;
+                [branch] if (_CoastV40Presentation > 0.5 && boatDistSq < 25.0)
+                {
+                    cabinMask = HarborCabinMask(i.worldPos, bottomWS);
+                    clip(cabinMask - 0.98);
+                }
                 clip(waterDepth - 0.0015);
 
                 float t = (_OceanV24Time > 0.001) ? _OceanV24Time : ((_WaterV22Time > 0.001) ? _WaterV22Time : _Time.y);
@@ -213,7 +201,7 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 else
                 {
                     refractedBottomWS = ComputeWorldSpacePosition(refractedUV,
-                        DeviceDepthForWorldPosition(refractedRawDepth), UNITY_MATRIX_I_VP);
+                        HarborDepthNDC(refractedRawDepth), UNITY_MATRIX_I_VP);
                 }
                 float refractedDepth = max(0.0, i.worldPos.y - refractedBottomWS.y);
                 float depthM = lerp(waterDepth, refractedDepth, 0.65);
@@ -422,7 +410,8 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                         }
                     }
                     float wakeFoam = saturate((vArm * 0.78 + propWash * 0.92 + hullFoam) * (0.42 + 0.58 * laceNoise));
-                    float combinedFoam = saturate((shoreFoam + bowWave * 0.82 + wakeFoam) * _FoamIntensity);
+                    float cabinFoam = smoothstep(0.98, 1.20, cabinMask);
+                    float combinedFoam = saturate((shoreFoam + bowWave * 0.82 + wakeFoam) * _FoamIntensity * cabinFoam);
                     half3 foamColor = lerp(half3(0.80, 0.93, 0.95), half3(0.98, 0.99, 1.0), combinedFoam);
                     finalColor = lerp(finalColor, foamColor, saturate(combinedFoam * 0.80));
                 }

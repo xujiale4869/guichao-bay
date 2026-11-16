@@ -113,8 +113,40 @@ namespace Deepsea
             Check(proof.nightBeamsOff,"v37 sunlight shafts switch off and the night watch retains moonlight");
             game.GameplayV34.CycleWatch();
             game.GameplayV34.CycleWatch();
+            yield return ReviewHullClearanceV401();
             game.SetWaterReviewAngleV35(oldAngle);
             File.WriteAllText(Path.Combine(evidence,"atmosphere-v37.json"),JsonUtility.ToJson(proof,true));
+        }
+
+        IEnumerator ReviewHullClearanceV401()
+        {
+            var navigation = game.GetComponent<SeaLifeNavigationV23>();
+            var visual = game.boat.Find("船身随波 · 视觉层");
+            Check(navigation != null && visual != null,"v40.1 waterline follows the animated hull");
+            if (navigation == null || visual == null) yield break;
+            customSailZoom = 8.5f;
+            var position = new Vector3(14.2f,SeaLifeRuntime.Sea,5.65f);
+            var sideView = Quaternion.Euler(26,-18,0);
+            game.PlaceBoat(position,72);
+            game.SetWaterReviewAngleV35(sideView,customSailZoom);
+            yield return new WaitForSecondsRealtime(.8f);
+            Check(FloatingSupportsClearV401(navigation,visual),"v40.1 deep-water broadside clears the bow and stern support points");
+            yield return Capture("v401-hull-broadside");
+            game.PlaceBoat(position,33);
+            game.SetWaterReviewAngleV35(sideView,customSailZoom);
+            yield return new WaitForSecondsRealtime(.65f);
+            Check(FloatingSupportsClearV401(navigation,visual),"v40.1 bow-quarter view clears the bow and stern support points");
+            yield return Capture("v401-hull-bow-quarter");
+        }
+
+        bool FloatingSupportsClearV401(SeaLifeNavigationV23 navigation, Transform visual)
+        {
+            const float distance = SeaLifeNavigationV23.HarborSupportDistance;
+            var forward = game.boat.forward * distance;
+            var pitch = visual.forward.y * distance;
+            float bow = visual.position.y + pitch - navigation.Height(game.boat.position + forward);
+            float stern = visual.position.y - pitch - navigation.Height(game.boat.position - forward);
+            return Mathf.Min(bow,stern) >= .015f;
         }
     }
 }
