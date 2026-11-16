@@ -36,6 +36,9 @@ namespace Deepsea
         static readonly int Mist = Shader.PropertyToID("_CoastMistV37");
         static readonly int RayColor = Shader.PropertyToID("_RayColor");
         static readonly int ShaftWeight = Shader.PropertyToID("_ShaftWeight");
+        static readonly int V40Presentation = Shader.PropertyToID("_CoastV40Presentation");
+        static readonly int V40HullWorldToLocal = Shader.PropertyToID("_CoastV40HullWorldToLocal");
+        static readonly int V40PlantTint = Shader.PropertyToID("_CoastV40PlantTint");
 
         static readonly Color[] MistColors = {
             new Color(.46f,.58f,.68f,.18f), new Color(.48f,.66f,.76f,.17f),
@@ -80,6 +83,13 @@ namespace Deepsea
         Mesh tidePoolMesh, originalTidePool, originalTidePoolCollision;
         MeshFilter tidePool;
         MeshCollider tidePoolCollider;
+        Renderer tidePoolRenderer, shallowManta;
+        Material originalTidePoolMaterial, tidePoolSandstone;
+        Transform boatVisual, bowCraft, inlandScenery;
+        bool shallowMantaWasEnabled, v40Presented;
+        readonly List<Object> v40Assets = new List<Object>();
+        readonly List<(Renderer renderer, Material[] original, Material[] refined)> rockBindings =
+            new List<(Renderer, Material[], Material[])>();
         Vector3 tidePoolOriginalPosition, tidePoolOriginalScale;
         float[] originalShellHeight, refinedShellHeight;
         bool presented = true, previousInRoom;
@@ -136,6 +146,9 @@ namespace Deepsea
 
             FitCoastalFixturesV38();
             BuildDriftingLeavesV381();
+            BuildBowCraftV40();
+            CollectCoastalRockBindingsV40();
+            BuildInlandSceneryV40();
 
             ApplyWatch(game.GameplayV34.State.watch);
             Debug.Log("SEA_ATMOSPHERE_V37_READY beams=" + Shafts + " contacts=" + Contacts);
@@ -200,23 +213,17 @@ namespace Deepsea
                 if (tidePoolCollider != null) originalTidePoolCollision = tidePoolCollider.sharedMesh;
                 tidePoolOriginalPosition = pool.position;
                 tidePoolOriginalScale = pool.localScale;
-                tidePoolMesh = Instantiate(originalTidePool);
-                tidePoolMesh.name = "V38 Irregular Tide Pool Rim";
-                var vertices = tidePoolMesh.vertices;
-                for (int i = 0; i < vertices.Length; i++)
+                tidePoolMesh = BuildFacetedStone("V40 Tide Pool Sandstone",true);
+                tidePoolRenderer = pool.GetComponent<Renderer>();
+                originalTidePoolMaterial = tidePoolRenderer != null ? tidePoolRenderer.sharedMaterial : null;
+                var limestone = Resources.Load<Material>("CoastMaple/Limestone");
+                if (limestone != null)
                 {
-                    var point = vertices[i];
-                    float angle = Mathf.Atan2(point.z,point.x);
-                    float radius = new Vector2(point.x,point.z).magnitude;
-                    float relief = .09f*Mathf.Sin(5*angle+.65f) + .045f*Mathf.Sin(9*angle);
-                    point.x *= 1 + relief;
-                    point.z *= 1 + relief;
-                    point.y += .09f*Mathf.SmoothStep(0,1,Mathf.InverseLerp(.29f,.50f,radius))*Mathf.Sin(6*angle);
-                    vertices[i] = point;
+                    tidePoolSandstone = new Material(limestone) { name = "V40 Warm Tidal Sandstone" };
+                    tidePoolSandstone.SetColor("_BaseColor",new Color(.88f,.76f,.57f));
+                    tidePoolSandstone.SetFloat("_NormalStrength",.16f);
+                    v40Assets.Add(tidePoolSandstone);
                 }
-                tidePoolMesh.vertices = vertices;
-                tidePoolMesh.RecalculateNormals();
-                tidePoolMesh.RecalculateBounds();
                 SetTidePoolPresentation(true);
                 Physics.SyncTransforms();
                 originalShellHeight = new float[game.TideShellCountV381];
@@ -242,6 +249,8 @@ namespace Deepsea
             pool.position = position;
             pool.localScale = refined ? new Vector3(6.2f,.92f,4.2f) : tidePoolOriginalScale;
             tidePool.sharedMesh = refined ? tidePoolMesh : originalTidePool;
+            if (tidePoolRenderer != null && tidePoolSandstone != null)
+                tidePoolRenderer.sharedMaterial = refined ? tidePoolSandstone : originalTidePoolMaterial;
             if (tidePoolCollider != null)
                 tidePoolCollider.sharedMesh = refined ? tidePoolMesh : originalTidePoolCollision;
             var heights = refined ? refinedShellHeight : originalShellHeight;
@@ -261,12 +270,16 @@ namespace Deepsea
 
         internal static void BuildLanternPlinthV381(SeaLifeRuntime runtime, Transform root, Material stone, Material timber)
         {
-            AddPlinthPart(runtime,root,PrimitiveType.Sphere,"Foundation rock",
-                new Vector3(0,.12f,0),new Vector3(2.2f,1.32f,1.9f),Quaternion.Euler(8,24,-7),stone);
-            AddPlinthPart(runtime,root,PrimitiveType.Sphere,"Side rock",
-                new Vector3(.72f,-.09f,-.38f),new Vector3(1.08f,.62f,.94f),Quaternion.Euler(9,-35,-12),stone);
-            AddPlinthPart(runtime,root,PrimitiveType.Sphere,"Side rock",
-                new Vector3(-.69f,-.13f,.39f),new Vector3(.96f,.62f,.98f),Quaternion.Euler(-13,51,6),stone);
+            var coast = runtime.GetComponent<SeaSeamlessWorldAndNauticalUIV29>();
+            float bed = coast != null ? coast.HeightAt(root.position.x,root.position.z) : root.position.y - 1.3f;
+            float bottom = Mathf.Min(-.3f,bed - root.position.y - .12f);
+            var foundation = BuildFacetedStone("V40 Lantern Foundation",false);
+            (root.GetComponent<BayOwnedGeometryV28>() ?? root.gameObject.AddComponent<BayOwnedGeometryV28>()).meshes.Add(foundation);
+            float rockHeight = (.57f - bottom) / foundation.bounds.size.y;
+            float center = bottom - foundation.bounds.min.y * rockHeight;
+            AddFoundation(root,foundation,stone,new Vector3(0,center,0),new Vector3(2.6f,rockHeight,2.35f),24);
+            AddFoundation(root,foundation,stone,new Vector3(.77f,-.31f,-.35f),new Vector3(1.22f,1.05f,1.08f),-35);
+            AddFoundation(root,foundation,stone,new Vector3(-.72f,-.30f,.40f),new Vector3(1.16f,.98f,1.14f),51);
             var corners = new[] { new Vector3(-.72f,0,-.60f),new Vector3(.72f,0,-.60f),
                 new Vector3(.72f,0,.60f),new Vector3(-.72f,0,.60f) };
             for (int i = 0; i < corners.Length; i++)
@@ -281,12 +294,300 @@ namespace Deepsea
             }
         }
 
+        static void AddFoundation(Transform parent, Mesh mesh, Material material, Vector3 position, Vector3 scale, float yaw)
+        {
+            var part = new GameObject("Faceted foundation rock");
+            part.transform.SetParent(parent,false);
+            part.transform.localPosition = position;
+            part.transform.localScale = scale;
+            part.transform.localRotation = Quaternion.Euler(0,yaw,0);
+            AddRenderer(part,mesh,material);
+        }
+
         static void AddPlinthPart(SeaLifeRuntime runtime, Transform root, PrimitiveType primitive, string partName,
             Vector3 position, Vector3 scale, Quaternion rotation, Material material)
         {
             var part = runtime.Primitive(partName,primitive,root,position,scale,material);
             part.localRotation = rotation;
             if (part.TryGetComponent<Collider>(out var collider)) collider.enabled = false;
+        }
+
+        void BuildBowCraftV40()
+        {
+            boatVisual = game.boat.Find("船身随波 · 视觉层") ?? game.boat;
+            var shader = Shader.Find("Deepsea/CoastMapleSurface");
+            if (shader == null) return;
+            var brass = new Material(shader) { name = "V40 Weathered Brass" };
+            brass.SetColor("_BaseColor",new Color(.66f,.46f,.23f));
+            brass.SetFloat("_Mode",7);
+            brass.SetFloat("_NormalStrength",0);
+            brass.SetFloat("_Metallic",.74f);
+            brass.SetFloat("_Roughness",.39f);
+            v40Assets.Add(brass);
+            bowCraft = game.Group("V40 Bow Cleat",boatVisual,Vector3.zero);
+            AddPlinthPart(game,bowCraft,PrimitiveType.Cylinder,"Cleat mounting plate",
+                new Vector3(0,.28f,1.47f),new Vector3(.20f,.025f,.16f),Quaternion.identity,brass);
+            AddPlinthPart(game,bowCraft,PrimitiveType.Cylinder,"Cleat post",
+                new Vector3(0,.35f,1.47f),new Vector3(.065f,.065f,.065f),Quaternion.identity,brass);
+            AddPlinthPart(game,bowCraft,PrimitiveType.Capsule,"Cleat horns",
+                new Vector3(0,.41f,1.47f),new Vector3(.043f,.105f,.043f),Quaternion.Euler(0,0,90),brass);
+            bay.CombineStaticParts(bowCraft.gameObject);
+            bowCraft.gameObject.SetActive(false);
+        }
+
+        void CollectCoastalRockBindingsV40()
+        {
+            var rockShader = Shader.Find("Deepsea/CoastMapleSurface");
+            var copies = new Dictionary<Material,Material>();
+            foreach (var renderer in game.world.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (renderer.name == "V26_ShallowMantaRay")
+                {
+                    shallowManta = renderer;
+                    shallowMantaWasEnabled = renderer.enabled;
+                }
+                if (rockShader == null || !renderer.name.Contains("Land_Rock")) continue;
+                var original = renderer.sharedMaterials;
+                var refined = (Material[])original.Clone();
+                for (int i = 0; i < original.Length; i++)
+                {
+                    var source = original[i];
+                    if (source == null) continue;
+                    if (!copies.TryGetValue(source,out var rock))
+                    {
+                        rock = new Material(source) { name = source.name + " V40 rock", shader = rockShader };
+                        if (source.HasProperty("_MainTex") && !source.HasProperty("_BaseMap"))
+                            rock.SetTexture("_BaseMap",source.GetTexture("_MainTex"));
+                        rock.SetFloat("_Mode",source.HasProperty("_Mode") && source.GetFloat("_Mode") > 1.5f ? 8f : 0f);
+                        rock.SetFloat("_NormalStrength",Mathf.Min(rock.GetFloat("_NormalStrength"),.22f));
+                        copies.Add(source,rock);
+                        v40Assets.Add(rock);
+                    }
+                    refined[i] = rock;
+                }
+                rockBindings.Add((renderer,original,refined));
+            }
+            Debug.Log($"V40_COAST_ART_READY rockRenderers={rockBindings.Count} shallowManta={(shallowManta != null)}");
+        }
+
+        void RefreshV40Presentation(bool value)
+        {
+            if (v40Presented != value)
+            {
+                v40Presented = value;
+                Shader.SetGlobalFloat(V40Presentation,value ? 1 : 0);
+                if (bowCraft != null) bowCraft.gameObject.SetActive(value);
+                if (inlandScenery != null) inlandScenery.gameObject.SetActive(value);
+                if (shallowManta != null) shallowManta.enabled = !value && shallowMantaWasEnabled;
+                foreach (var rock in rockBindings)
+                    if (rock.renderer != null) rock.renderer.sharedMaterials = value ? rock.refined : rock.original;
+            }
+            if (value && boatVisual != null)
+                Shader.SetGlobalMatrix(V40HullWorldToLocal,boatVisual.worldToLocalMatrix);
+        }
+
+        void BuildInlandSceneryV40()
+        {
+            var shader = Shader.Find("Deepsea/V24CoastShowcaseSurface");
+            var stone = Resources.Load<Material>("CoastMaple/Limestone");
+            if (shader == null || stone == null) return;
+            inlandScenery = game.Group("V40 Inland Scenery",game.exterior,Vector3.zero);
+            var grassMaterial = MakeMeadowMaterial(shader,"Grass",.085f);
+            var flowerMaterial = MakeMeadowMaterial(shader,"Wildflowers",.07f);
+            var grassParts = new List<CombineInstance>(520);
+            var flowerParts = new List<CombineInstance>(140);
+            var wallParts = new List<CombineInstance>();
+            var grass = BuildMeadowPlant(false);
+            var flowers = BuildMeadowPlant(true);
+            var blocks = BuildFacetedStone("Terrace wall block",false);
+            var exclusions = new List<Bounds>();
+            foreach (var node in game.exterior.GetComponentsInChildren<Transform>())
+            {
+                if (node.name.StartsWith("V31_NPC_House_",System.StringComparison.Ordinal))
+                    exclusions.Add(new Bounds(node.position,new Vector3(8,200,8)));
+                else if (node.parent != null && node.parent.name == "V31_VillageStonePaths")
+                    exclusions.Add(new Bounds(node.position,new Vector3(2.4f,200,2.4f)));
+            }
+            exclusions.Add(new Bounds(new Vector3(-9,0,2.8f),new Vector3(8.4f,200,6.4f)));
+
+            var random = new System.Random(4019);
+            for (int tryIndex = 0; tryIndex < 5200 && grassParts.Count < 520; tryIndex++)
+            {
+                float x = Mathf.Lerp(-29,-9,(float)random.NextDouble());
+                float z = Mathf.Lerp(-36,37,(float)random.NextDouble());
+                if (!TryInlandPlacement(x,z,exclusions,out var position)) continue;
+                float scale = Mathf.Lerp(.62f,1.16f,(float)random.NextDouble());
+                float yaw = (float)random.NextDouble()*360;
+                AddInlandPart(grassParts,grass,position,Quaternion.Euler(0,yaw,0),new Vector3(scale,scale,scale));
+                if (grassParts.Count % 3 != 0 || flowerParts.Count >= 140) continue;
+                if (TryInlandPlacement(x+.28f,z-.18f,exclusions,out var blossom))
+                    AddInlandPart(flowerParts,flowers,blossom,Quaternion.Euler(0,yaw+38,0),Vector3.one*scale);
+            }
+            for (int tryIndex = 0; tryIndex < 800 && flowerParts.Count < 140; tryIndex++)
+            {
+                float x = Mathf.Lerp(-27,-10,(float)random.NextDouble());
+                float z = Mathf.Lerp(-34,35,(float)random.NextDouble());
+                if (TryInlandPlacement(x,z,exclusions,out var position))
+                    AddInlandPart(flowerParts,flowers,position,Quaternion.Euler(0,tryIndex*137.5f,0),Vector3.one);
+            }
+
+            var starts = new[] { new Vector2(-19,10),new Vector2(-18,-4),new Vector2(-19,-23) };
+            var directions = new[] { new Vector2(.22f,.98f),new Vector2(-.24f,-.97f),new Vector2(.34f,.94f) };
+            int wallSections = 0;
+            for (int wall = 0; wall < starts.Length; wall++)
+            {
+                int before = wallParts.Count;
+                for (int i = 0; i < 10; i++)
+                {
+                    var point = starts[wall]+directions[wall]*(i*.76f);
+                    if (!TryInlandPlacement(point.x,point.y,exclusions,out var position)) continue;
+                    float yaw = Mathf.Atan2(directions[wall].x,directions[wall].y)*Mathf.Rad2Deg;
+                    var rotation = Quaternion.Euler(0,yaw+(i%2==0 ? 5 : -5),0);
+                    AddInlandPart(wallParts,blocks,position+Vector3.up*.13f,rotation,new Vector3(.72f,.68f,.91f));
+                    AddInlandPart(wallParts,blocks,position+Vector3.up*(i%3==0 ? .47f : .39f),
+                        Quaternion.Euler(0,yaw+180,0),new Vector3(.63f,.48f,.83f));
+                }
+                if (wallParts.Count > before) wallSections++;
+            }
+            AddInlandBatch("V40_InlandWindMeadow",grassParts,grassMaterial);
+            AddInlandBatch("V40_InlandWildflowers",flowerParts,flowerMaterial);
+            AddInlandBatch("V40_InlandTerraceStoneWalls",wallParts,stone);
+            Destroy(grass);
+            Destroy(flowers);
+            Destroy(blocks);
+            inlandScenery.gameObject.SetActive(false);
+            Debug.Log($"V40_INLAND_READY grass={grassParts.Count} flowers={flowerParts.Count} wallSections={wallSections} batches={inlandScenery.childCount}");
+        }
+
+        Material MakeMeadowMaterial(Shader shader, string label, float sway)
+        {
+            var material = new Material(shader) { name = "V40 " + label };
+            material.SetFloat("_Mode",6);
+            material.SetFloat("_Sway",sway);
+            material.SetFloat("_NormalStrength",0);
+            material.SetFloat(V40PlantTint,1);
+            v40Assets.Add(material);
+            return material;
+        }
+
+        bool TryInlandPlacement(float x, float z, List<Bounds> exclusions, out Vector3 position)
+        {
+            float y = coast.HeightAt(x,z);
+            position = new Vector3(x,y-.035f,z);
+            if (y < SeaLifeRuntime.Sea+.85f || y > SeaLifeRuntime.Sea+9.5f) return false;
+            foreach (var bounds in exclusions)
+                if (bounds.Contains(position)) return false;
+            return Mathf.Abs(coast.HeightAt(x+.25f,z)-coast.HeightAt(x-.25f,z)) < .49f &&
+                Mathf.Abs(coast.HeightAt(x,z+.25f)-coast.HeightAt(x,z-.25f)) < .49f;
+        }
+
+        void AddInlandPart(List<CombineInstance> batch, Mesh mesh, Vector3 position, Quaternion rotation, Vector3 scale)
+        {
+            batch.Add(new CombineInstance { mesh=mesh, transform=inlandScenery.worldToLocalMatrix*Matrix4x4.TRS(position,rotation,scale) });
+        }
+
+        void AddInlandBatch(string name, List<CombineInstance> parts, Material material)
+        {
+            if (parts.Count == 0) return;
+            var combined = new Mesh { name=name, indexFormat=IndexFormat.UInt32 };
+            combined.CombineMeshes(parts.ToArray(),true,true);
+            var bounds = combined.bounds;
+            bounds.Expand(.24f);
+            combined.bounds = bounds;
+            var owner = game.Group(name,inlandScenery,Vector3.zero);
+            AddRenderer(owner.gameObject,combined,material);
+            v40Assets.Add(combined);
+        }
+
+        static Mesh BuildMeadowPlant(bool flowers)
+        {
+            var vertices = new List<Vector3>();
+            var colors = new List<Color32>();
+            var triangles = new List<int>();
+            int stems = flowers ? 3 : 5;
+            for (int stem = 0; stem < stems; stem++)
+            {
+                float angle = (stem*137.5f+13)*Mathf.Deg2Rad;
+                var forward = new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle));
+                var side = new Vector3(-forward.z,0,forward.x);
+                float height = flowers ? .43f+.10f*stem : .40f+.09f*(stem%4);
+                var root = forward*(.06f+.035f*stem);
+                var middle = root+forward*.09f+Vector3.up*(height*.48f);
+                var tip = root+forward*(flowers ? .13f : .27f)+Vector3.up*height;
+                float width = flowers ? .018f : .049f;
+                int first = vertices.Count;
+                vertices.AddRange(new[]{root-side*width,root+side*width,middle-side*width*.85f,middle+side*width*.85f,tip});
+                colors.AddRange(new Color32[]{new Color32(70,107,38,0),new Color32(70,107,38,0),
+                    new Color32(116,153,57,118),new Color32(116,153,57,118),new Color32(182,188,84,255)});
+                triangles.AddRange(new[]{first,first+2,first+1,first+1,first+2,first+3,first+2,first+4,first+3});
+                if (!flowers) continue;
+                for (int petal = 0; petal < 5; petal++)
+                {
+                    float a = (petal*72+stem*19)*Mathf.Deg2Rad;
+                    var petalDir = new Vector3(Mathf.Cos(a),0,Mathf.Sin(a));
+                    var petalSide = new Vector3(-petalDir.z,0,petalDir.x);
+                    int j = vertices.Count;
+                    vertices.Add(tip);
+                    vertices.Add(tip+petalDir*.078f+petalSide*.034f+Vector3.up*.022f);
+                    vertices.Add(tip+petalDir*.078f-petalSide*.034f+Vector3.up*.022f);
+                    colors.Add(new Color32(199,129,31,255));
+                    colors.Add(new Color32(246,206,76,255));
+                    colors.Add(new Color32(247,219,98,255));
+                    triangles.AddRange(new[]{j,j+1,j+2});
+                }
+            }
+            var mesh = new Mesh { name=flowers ? "V40 Wildflower Cluster" : "V40 Grass Tuft" };
+            mesh.SetVertices(vertices);
+            var normals = new Vector3[vertices.Count];
+            for (int i = 0; i < normals.Length; i++) normals[i]=Vector3.up;
+            mesh.normals=normals;
+            mesh.SetColors(colors);
+            mesh.SetTriangles(triangles,0);
+            return mesh;
+        }
+
+        static Mesh BuildFacetedStone(string name, bool shelf)
+        {
+            const int sides = 12;
+            var heights = shelf ? new[]{-.44f,-.29f,.10f,.205f,.235f} : new[]{-.48f,-.31f,.18f,.37f,.45f};
+            var radii = shelf ? new[]{.40f,.53f,.53f,.46f,.34f} : new[]{.34f,.51f,.50f,.38f,.23f};
+            var rings = new Vector3[heights.Length,sides];
+            for (int ring = 0; ring < heights.Length; ring++)
+            for (int side = 0; side < sides; side++)
+            {
+                float angle = side*Mathf.PI*2/sides+(ring%2)*.12f;
+                float radius = radii[ring]*(1+.10f*Mathf.Sin(side*2.03f+.63f));
+                float y = heights[ring]+.021f*Mathf.Sin(side*1.74f+ring*.66f);
+                rings[ring,side] = new Vector3(Mathf.Cos(angle)*radius,y,Mathf.Sin(angle)*radius);
+            }
+            var vertices = new List<Vector3>();
+            var uv = new List<Vector2>();
+            void Face(Vector3 a, Vector3 b, Vector3 c)
+            {
+                vertices.Add(a); vertices.Add(b); vertices.Add(c);
+                uv.Add(new Vector2(a.x+.5f,a.z+.5f)); uv.Add(new Vector2(b.x+.5f,b.z+.5f)); uv.Add(new Vector2(c.x+.5f,c.z+.5f));
+            }
+            for (int side = 0; side < sides; side++)
+            {
+                int next = (side+1)%sides;
+                for (int ring = 1; ring < heights.Length; ring++)
+                {
+                    Face(rings[ring-1,side],rings[ring,side],rings[ring,next]);
+                    Face(rings[ring-1,side],rings[ring,next],rings[ring-1,next]);
+                }
+                int top = heights.Length-1;
+                Face(new Vector3(0,heights[0],0),rings[0,side],rings[0,next]);
+                Face(new Vector3(0,heights[top],0),rings[top,next],rings[top,side]);
+            }
+            var indices = new int[vertices.Count];
+            for (int i = 0; i < indices.Length; i++) indices[i]=i;
+            var mesh = new Mesh { name=name };
+            mesh.SetVertices(vertices);
+            mesh.SetUVs(0,uv);
+            mesh.SetTriangles(indices,0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            return mesh;
         }
 
         internal void ApplyWatch(int watch)
@@ -345,6 +646,7 @@ namespace Deepsea
             var focus = game.ActivePosition + Vector3.up * .75f;
             if (focusActive) RefreshFocus(focus);
             else focusCurrent = false;
+            RefreshV40Presentation(outdoors);
 
             int watch = game.GameplayV34.State.watch;
             bool lightChanged = presented && game.InRoom != previousInRoom;
@@ -633,6 +935,7 @@ namespace Deepsea
         void OnDestroy()
         {
             Shader.SetGlobalVector(Coast,Vector4.zero);
+            RefreshV40Presentation(false);
             foreach (var caster in newCasters)
                 if (caster != null) caster.shadowCastingMode = ShadowCastingMode.Off;
             if (visual != null) Destroy(visual.gameObject);
@@ -643,6 +946,9 @@ namespace Deepsea
             Destroy(tidePoolMesh);
             Destroy(beamMesh);
             Destroy(shadeMesh);
+            if (bowCraft != null) Destroy(bowCraft.gameObject);
+            if (inlandScenery != null) Destroy(inlandScenery.gameObject);
+            foreach (var asset in v40Assets) Destroy(asset);
         }
     }
 }

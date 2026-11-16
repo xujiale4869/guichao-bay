@@ -98,6 +98,15 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
             float4 _CoastBoat;
             float4 _CoastBoatHeading;
             float4 _CoastAtmosphereV37;
+            float _CoastV40Presentation;
+            float4x4 _CoastV40HullWorldToLocal;
+
+            float CabinOutline(float3 worldPosition)
+            {
+                float3 local = mul(_CoastV40HullWorldToLocal, float4(worldPosition, 1.0)).xyz;
+                float2 offset = float2(local.x / 0.45, (local.z - 0.03) / 1.12);
+                return dot(offset, offset);
+            }
 
             #include "../HarborLightingV27.hlsl"
             struct Attributes
@@ -133,6 +142,12 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 float wCrest;
                 float3 waveOffset = EvaluateBayWaves(world.xz, t, wNormal, wCrest);
                 world += waveOffset;
+                float2 boatDelta = world.xz - _CoastBoat.xy;
+                [branch] if (_CoastV40Presentation > 0.5 && dot(boatDelta, boatDelta) < 9.0)
+                {
+                    float depression = 1.0 - smoothstep(0.48, 1.65, CabinOutline(world));
+                    world.y -= (0.25 + max(waveOffset.y, 0.0) * 0.75) * depression;
+                }
 
                 o.worldPos   = world;
                 o.waveNormal = wNormal;
@@ -152,6 +167,11 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
 
             half4 Frag(Varyings i) : SV_Target
             {
+                float2 boatDelta = i.worldPos.xz - _CoastBoat.xy;
+                float boatDistSq = dot(boatDelta, boatDelta);
+                [branch] if (_CoastV40Presentation > 0.5 && boatDistSq < 9.0)
+                    clip(CabinOutline(i.worldPos) - 0.88);
+
                 float2 screenUV = GetNormalizedScreenSpaceUV(i.positionCS);
                 float rawDepth = SampleSceneDepth(screenUV);
                 float3 bottomWS = ComputeWorldSpacePosition(screenUV, DeviceDepthForWorldPosition(rawDepth), UNITY_MATRIX_I_VP);
@@ -295,19 +315,19 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                     float sparkleMid = smoothstep(0.36 - fWidth, 0.60 + fWidth, facet);
                     float sparkleCore = smoothstep(0.52 - fWidth, 0.75 + fWidth, facet);
 
-                    float midSunCone = pow(ndoth, max(6.0, _GlintFocus / 6.0)) * lerp(0.56, 1.0, i.waveCrest);
-                    float coreSunCone = pow(ndoth, max(12.0, _GlintFocus * (26.0 / 72.0))) * lerp(0.35, 1.0, i.waveCrest);
+                    float midSunCone = pow(ndoth, max(8.0, _GlintFocus * 0.12)) * lerp(0.46, 1.0, i.waveCrest);
+                    float coreSunCone = pow(ndoth, max(16.0, _GlintFocus * 0.28)) * lerp(0.28, 1.0, i.waveCrest);
 
                     float depthSparkleMask = smoothstep(0.22, 1.35, depthM);
                     float broadSpec = pow(ndoth, 16.0) * 0.085 * sparkleMid;
 
                     float totalSparkle = (
                         broadSpec +
-                        (sparkleMid * midSunCone * 0.33 + sparkleCore * coreSunCone * 0.78) * _GlintIntensity
+                        (sparkleMid * midSunCone * 0.46 + sparkleCore * coreSunCone * 0.92) * _GlintIntensity
                     ) * _GlintEnable * depthSparkleMask * sun.shadowAttenuation * saturate(sun.direction.y * 3.0);
 
-                    half3 warmGoldGlintColor = lerp(sun.color, _SunPathColor.rgb * half3(1.0, 0.96, 0.81), 0.72);
-                    finalColor += warmGoldGlintColor * min(totalSparkle, 0.74);
+                    half3 warmGoldGlintColor = lerp(sun.color, _SunPathColor.rgb * half3(1.0, 0.94, 0.74), 0.76);
+                    finalColor += warmGoldGlintColor * min(totalSparkle, 0.86);
                 }
                 else
                 {
@@ -344,8 +364,6 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 // -------------------------------------------------------------
                 // 7. 岸礁/栈桥双层涌浪白沫与小船 V 型扩散尾流
                 // -------------------------------------------------------------
-                float2 boatDelta = p - _CoastBoat.xy;
-                float boatDistSq = dot(boatDelta, boatDelta);
                 bool nearShore = depthM < max(0.14, _FoamWidth);
                 // Fade the tail after it has already decayed below one percent of its original strength.
                 const float wakeEnd = 48.0;
@@ -386,10 +404,21 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                         {
                             float sternDist = max(0.0, -along - 1.05);
                             float tail = 1.0 - smoothstep(36.0 * 36.0, wakeEnd * wakeEnd, boatDistSq);
-                            float arm = (abs(side) - (0.26 + sternDist * 0.27)) / (0.15 + sternDist * 0.04);
-                            float wash = side / (0.22 + sternDist * 0.05);
-                            vArm = exp(-arm * arm - sternDist * 0.15) * tail * activeSpeed;
-                            propWash = exp(-wash * wash - sternDist * 0.22) * tail * activeSpeed;
+                            float armWidth = 0.26 + sternDist * 0.27;
+                            float swirl = 0.0, foamCluster = 1.0;
+                            if (_CoastV40Presentation > 0.5)
+                            {
+                                float progress = smoothstep(0.0, 1.8, sternDist);
+                                swirl = progress * (0.12 * sin(sternDist * 2.1 - t * 3.4 + side * 2.8)
+                                    + (laceNoise - 0.5) * min(0.8, 0.24 + sternDist * 0.055));
+                                foamCluster = lerp(1.0, lerp(0.22, 1.0,
+                                    smoothstep(0.27, 0.78, laceNoise + 0.16 * sin(sternDist * 3.2 - t * 4.5))), progress);
+                            }
+                            float arm = (abs(side + swirl * 0.64) - armWidth) / (0.15 + sternDist * 0.04);
+                            float wash = (side - swirl * 0.88) / (0.22 + sternDist * 0.05);
+                            float wakeWeight = tail * activeSpeed * foamCluster;
+                            vArm = exp(-arm * arm - sternDist * 0.15) * wakeWeight;
+                            propWash = exp(-wash * wash - sternDist * 0.22) * wakeWeight;
                         }
                     }
                     float wakeFoam = saturate((vArm * 0.78 + propWash * 0.92 + hullFoam) * (0.42 + 0.58 * laceNoise));

@@ -6,6 +6,7 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
     _Scale("Texture metres",Float)=.28 _NormalStrength("Normal",Float)=.4 _UseMask("Use ARM",Float)=0
     _Roughness("Roughness",Float)=.8 _Metallic("Metallic",Float)=0 _Cutoff("Alpha cut",Float)=.35
     _Sway("Sway",Float)=0 _Emission("Emission",Float)=0
+    _CoastV40PlantTint("Plant vertex tint",Float)=0
     _AtlasCell("Coral atlas cell",Vector)=(0,0,.5,.5)
   }
   SubShader {Tags{"RenderType"="Opaque" "RenderPipeline"="UniversalPipeline"} Cull Off
@@ -16,10 +17,11 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
     TEXTURE2D(_SandMap);SAMPLER(sampler_SandMap);TEXTURE2D(_CoverMap);SAMPLER(sampler_CoverMap);TEXTURE2D(_CausticMap);SAMPLER(sampler_CausticMap);
     float _OceanV24UnderLOD;
     CBUFFER_START(UnityPerMaterial)
-    half4 _BaseColor;float4 _AtlasCell;float _Mode,_Scale,_NormalStrength,_UseMask,_Roughness,_Metallic,_Cutoff,_Sway,_Emission;
+    half4 _BaseColor;float4 _AtlasCell;float _Mode,_Scale,_NormalStrength,_UseMask,_Roughness,_Metallic,_Cutoff,_Sway,_Emission,_CoastV40PlantTint;
     CBUFFER_END
     float _ShowcaseClay;
     float4 _CoastAtmosphereV37;
+    float _CoastV40Presentation;
     half4 _CoastMistV37;
     struct A{float4 p:POSITION;float3 n:NORMAL;float4 t:TANGENT;float2 uv:TEXCOORD0;half4 c:COLOR;UNITY_VERTEX_INPUT_INSTANCE_ID};
     struct V{float4 p:SV_POSITION;float3 w:TEXCOORD0;float3 n:TEXCOORD1;float4 t:TEXCOORD2;float2 uv:TEXCOORD3;half4 c:COLOR;UNITY_VERTEX_INPUT_INSTANCE_ID};
@@ -100,11 +102,14 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
       Light sun=GetMainLight(shadowCoord);
       [branch] if(budget>.999)return half4(OceanLow(geom,baseAlbedo,sandSample,sand,depth,sun),1);
       half3 albedo=baseAlbedo;float rough=_Roughness,ao=1;
+      if(_CoastV40PlantTint>.5) albedo*=i.c.rgb;
+      bool rockV40=_Mode<.5 || abs(_Mode-8)<.1;
+      float stoneRelief=rockV40 && _ShowcaseClay<.5 ? _CoastV40Presentation*smoothstep(-.5,.18,i.w.y) : 0;
       float2 uv=i.uv;if(_Mode<1.5)uv=(weight.x>weight.y&&weight.x>weight.z?i.w.zy:weight.y>weight.z?i.w.xz:i.w.xy)*_Scale;
       if(_UseMask>.5){half3 arm=SAMPLE_TEXTURE2D(_MaskMap,sampler_MaskMap,uv).rgb;ao=lerp(_CoastAtmosphereV37.w>0 ? .80 : .76,1,arm.r);rough=arm.g;}
       if(_NormalStrength>.01){float3 b=UnpackNormal(SAMPLE_TEXTURE2D(_BumpMap,sampler_BumpMap,uv));
         float3 bump;if(_Mode<1.5)bump=weight.x>weight.y&&weight.x>weight.z?float3(sign(n.x)*b.z,b.y,b.x):weight.y>weight.z?float3(b.x,sign(n.y)*b.z,b.y):float3(b.x,b.y,sign(n.z)*b.z);
-        else{float3 tangent=normalize(i.t.xyz);bump=tangent*b.x+cross(n,tangent)*i.t.w*b.y+n*b.z;}n=normalize(lerp(n,bump,_NormalStrength));}
+        else{float3 tangent=normalize(i.t.xyz);bump=tangent*b.x+cross(n,tangent)*i.t.w*b.y+n*b.z;}n=normalize(lerp(n,bump,_NormalStrength*lerp(1,.52,stoneRelief)));}
 
       bool coastV38=_CoastAtmosphereV37.w>0 && _ShowcaseClay<.5;
       float sandV37=0;
@@ -180,6 +185,11 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
         albedo *= lerp(half3(1,1,1), half3(.76, .64, .49), wetSand * .88);
         rough = lerp(rough, .10, wetSand);
       }
+      if(stoneRelief>0){
+        float lift=(1-smoothstep(.10,.45,dot(albedo,half3(.299,.587,.114))))*stoneRelief;
+        albedo=lerp(albedo,max(albedo,half3(.43,.42,.37)),lift*.78);
+        ao=lerp(ao,max(ao,.91),stoneRelief);
+      }
       if(_ShowcaseClay>.5){albedo=half3(.52,.52,.52);n=geom;rough=.95;}
 
       SurfaceData s=(SurfaceData)0;s.albedo=albedo;s.metallic=_Metallic;s.specular=half3(.04,.04,.04);s.smoothness=1-rough;s.normalTS=half3(0,0,1);s.occlusion=ao;s.alpha=1;s.emission=albedo*_Emission;
@@ -195,6 +205,7 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
       input.bakedGI=max(skyFloor,SampleSH(n));
       input.normalizedScreenSpaceUV=GetNormalizedScreenSpaceUV(i.p);input.shadowMask=half4(1,1,1,1);
       half3 c=UniversalFragmentPBR(input,s).rgb;
+      c=lerp(c,max(c,albedo*half3(.33,.37,.41)),stoneRelief);
 
       if(abs(_Mode-4)<.1){
         float back=saturate(dot(-n,sun.direction));
