@@ -153,6 +153,7 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
             {
                 float2 boatDelta = i.worldPos.xz - _CoastBoat.xy;
                 float boatDistSq = dot(boatDelta, boatDelta);
+                bool nearHull = _CoastV40Presentation > 0.5 && boatDistSq < 25.0;
 
                 float2 screenUV = GetNormalizedScreenSpaceUV(i.positionCS);
                 float rawDepth = SampleSceneDepth(screenUV);
@@ -163,7 +164,7 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                     return half4(saturate(waterDepth / 25.0), 0, 0, 1);
 
                 float cabinMask = 99.0;
-                [branch] if (_CoastV40Presentation > 0.5 && boatDistSq < 25.0)
+                [branch] if (nearHull)
                 {
                     cabinMask = HarborCabinMask(i.worldPos, bottomWS);
                     clip(cabinMask - 0.98);
@@ -202,6 +203,12 @@ Shader "Deepsea/SeaSurfaceSparkleHarborV27"
                 {
                     refractedBottomWS = ComputeWorldSpacePosition(refractedUV,
                         HarborDepthNDC(refractedRawDepth), UNITY_MATRIX_I_VP);
+                    // The offset ray can hit the hull from an adjacent water pixel.
+                    [branch] if (nearHull && HarborHullOpaqueSample(refractedBottomWS))
+                    {
+                        refractedUV = screenUV;
+                        refractedBottomWS = bottomWS;
+                    }
                 }
                 float refractedDepth = max(0.0, i.worldPos.y - refractedBottomWS.y);
                 float depthM = lerp(waterDepth, refractedDepth, 0.65);

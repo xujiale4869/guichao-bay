@@ -124,6 +124,9 @@ namespace Deepsea
             var visual = game.boat.Find("船身随波 · 视觉层");
             Check(navigation != null && visual != null,"v40.1 waterline follows the animated hull");
             if (navigation == null || visual == null) yield break;
+            Vector3 previousPosition = game.boat.position;
+            float previousHeading = game.boat.eulerAngles.y;
+            float previousZoom = customSailZoom;
             customSailZoom = 8.5f;
             var position = new Vector3(14.2f,SeaLifeRuntime.Sea,5.65f);
             var sideView = Quaternion.Euler(26,-18,0);
@@ -137,6 +140,17 @@ namespace Deepsea
             yield return new WaitForSecondsRealtime(.65f);
             Check(FloatingSupportsClearV401(navigation,visual),"v40.1 bow-quarter view clears the bow and stern support points");
             yield return Capture("v401-hull-bow-quarter");
+
+            game.PlaceBoat(position,72);
+            game.SetWaterReviewAngleV35(sideView,customSailZoom);
+            game.DriveInput = Vector2.up;
+            yield return new WaitForSecondsRealtime(1.25f);
+            Check(navigation.WakeCount > 1 && FloatingSupportsClearV401(navigation,visual),
+                "v40.1 deep-water sailing emits a wake while keeping both end supports clear");
+            yield return Capture("v401-hull-underway");
+            game.DriveInput = Vector2.zero;
+            game.PlaceBoat(previousPosition,previousHeading);
+            customSailZoom = previousZoom;
         }
 
         bool FloatingSupportsClearV401(SeaLifeNavigationV23 navigation, Transform visual)

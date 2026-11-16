@@ -1,6 +1,6 @@
 # 深海灯塔当前工程
 
-当前最新版为 v40。更新船舱水面、破碎尾流、岸礁和陆地草坡。程序见 Builds/SeaAtmosphereV37，实机证据见 Docs/SeaAtmosphereV37。
+当前最新版为 v40.1。按船模轮廓修正船舱水面与历史尾迹遮罩，并加入船首、中部、船尾三点浮力。实机证据见 Docs/SeaAtmosphereV37。
 
 历史海岸美术版本：v11，2026-10-23 完成独立程序验收。主要分析与制作记录在 `C:/Users/许嘉乐/Documents/ChatGPT/深海灯塔/art-v11/reference-analysis.md`，项目内副本见 `Docs/原图对照与美术推进-v11.md`。
 

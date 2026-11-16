@@ -37,4 +37,10 @@ float HarborCabinMask(float3 waterWS, float3 opaqueWS)
     return min(atWater, atSolid);
 }
 
+bool HarborHullOpaqueSample(float3 positionWS)
+{
+    float3 local = HarborCabinLocal(positionWS);
+    return local.y >= -0.14 && local.y <= 0.70 && HarborCabinOutline(local) < 1.13;
+}
+
 #endif
