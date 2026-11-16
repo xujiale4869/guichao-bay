@@ -1,27 +1,26 @@
-# 归潮湾 v39 · 帧率优化
+# 归潮湾 v40 · 船舱、岸礁与陆地造景
 
 Windows 程序位于 `Builds/SeaAtmosphereV37/Guichao-SeaAtmosphereV37.exe`。桌面入口为「深海灯塔—最新版」。
 
-- 海面复用折射深度采样，只在近岸和尾流范围内计算泡沫。深处的海床使用简化光照，潮间带保留原有的湿沙反光。
-- 静态岩石跳过植被摆动计算。远处与细小的附加树影按距离裁剪，灯柱的石基和木构件按材质合批。相机、船和光照变化时更新对焦及光束。
-- 调整斜阳碎光和潮池接地。移除 v38 额外加入的海鸥、银鱼和蝠鲼几何装饰，保留红枫落叶。红枫下大礁石的深色缝隙仍然可见。
+- 船舱遮罩跟随船身的浮动与倾斜，水面在船底逐渐下压。尾流加入横向涡流和泡沫团簇，近岸仍使用独立的岸浪泡沫。中午斜阳碎光略微扩宽，船首原有卷缆绳旁新增黄铜系缆件。
+- 调整 20 个岸岩渲染器，包括红枫下的精雕石。用多面砂岩替换潮池浅石和灯柱台基，潮池碰撞网格与采集贝壳跟随新表面。
+- 沿地形铺设 520 簇草、140 簇野花及三段石砌矮墙。三组几何分别合并成一个网格。
+- 栈桥下的灰色水下剪影仍可见。当前场景中没有找到旧版蝠鲼渲染器，剪影来源仍需确认。
 
-## 1080p 实机短测
+## 1080p 实机验证
 
-Intel Arc 130T，航行及建造各预热 60 帧，再采样 480 帧。v38 使用同一台机器重新采样。
+Intel Arc 130T，`village-v31-review11` 通过 288 项检查。航行和建造分别预热 60 帧，再采样 480 帧。
 
-| 指标 | v38 同机复测 | v39 |
+| 模式 | 平均帧率 | P95 帧时间 |
 | --- | ---: | ---: |
-| 航行平均帧率 | 98.32 FPS | 109.26 FPS |
-| 航行 P95 帧时间 | 11.92 ms | 10.54 ms |
-| 建造平均帧率 | 84.29 FPS | 113.12 FPS |
-| 建造 P95 帧时间 | 14.70 ms | 10.22 ms |
+| 航行 | 110.80 FPS | 10.51 ms |
+| 建造 | 112.42 FPS | 10.45 ms |
 
-本轮平均帧率差为航行 +11.1%、建造 +34.2%。此前的 v39 候选航行两轮为 95.66 和 109.71 FPS，短测有运行间波动。
-
-`village-v31-review10` 通过 288 项自动检查。[v39 验收](result.json) · [v38 同机复测](v38-control-result.json) · [光照验收](atmosphere-result.json)
+[验收结果](result.json) · [光照数据](atmosphere-result.json)
 
 ## 实机截图
 
-- [1080p 全景](preview.jpg) · [同机位旧版光照](00-v361-same-view.jpg)
-- [1080p 岸边](02-wet-shore-and-godrays.jpg) · [同机位旧版岸景](03-v361-same-shore.jpg)
+- [海湾全景](preview.jpg) · [v39 同机位](https://github.com/xujiale4869/guichao-bay/blob/79846e45909608cbd3f62c7e8cf26ac7e71a565f/Docs/SeaAtmosphereV37/preview.jpg)
+- [岸边近景](02-wet-shore-and-godrays.jpg) · [v39 同机位](https://github.com/xujiale4869/guichao-bay/blob/79846e45909608cbd3f62c7e8cf26ac7e71a565f/Docs/SeaAtmosphereV37/02-wet-shore-and-godrays.jpg)
+- [渔村与陆地草坡](04-inland-village.jpg)
+- [同机位旧版光照全景](00-v361-same-view.jpg) · [同机位旧版光照岸边](03-v361-same-shore.jpg)

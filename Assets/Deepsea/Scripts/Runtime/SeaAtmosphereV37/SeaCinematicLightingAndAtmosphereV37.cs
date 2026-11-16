@@ -350,7 +350,7 @@ namespace Deepsea
                 bool coastalRock = label.Contains("Land_Rock") || label.StartsWith("EN_MapleFoot",System.StringComparison.Ordinal) ||
                     label.StartsWith("EN_MapleHeadland",System.StringComparison.Ordinal) ||
                     label.StartsWith("EN_Foreground_Rock_",System.StringComparison.Ordinal) ||
-                    label.Contains("FineShore") && (label.Contains("Foot") || label.Contains("Headland"));
+                    label.StartsWith("EN_FineShore_LOD",System.StringComparison.Ordinal);
                 if (rockShader == null || !coastalRock) continue;
                 var original = renderer.sharedMaterials;
                 var refined = (Material[])original.Clone();
@@ -363,7 +363,9 @@ namespace Deepsea
                         rock = new Material(source) { name = source.name + " V40 rock", shader = rockShader };
                         if (source.HasProperty("_MainTex") && !source.HasProperty("_BaseMap"))
                             rock.SetTexture("_BaseMap",source.GetTexture("_MainTex"));
-                        rock.SetFloat("_Mode",source.HasProperty("_Mode") && source.GetFloat("_Mode") > 1.5f ? 8f : 0f);
+                        bool authoredUv = source.shader.name == "Deepsea/CoastFineStone" ||
+                            source.HasProperty("_Mode") && source.GetFloat("_Mode") > 1.5f;
+                        rock.SetFloat("_Mode",authoredUv ? 8f : 0f);
                         rock.SetFloat("_NormalStrength",Mathf.Min(rock.GetFloat("_NormalStrength"),.22f));
                         copies.Add(source,rock);
                         v40Assets.Add(rock);
