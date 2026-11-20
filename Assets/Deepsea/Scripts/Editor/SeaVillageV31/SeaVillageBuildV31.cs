@@ -57,7 +57,7 @@ namespace Deepsea.Editor {
      throw new InvalidOperationException("Missing or mismatched v36 score asset "+clip);
    }
    if(atmosphere){
-    foreach(string name in new[]{"BeamKeep","ContactKeep"}){
+    foreach(string name in new[]{"BeamKeep","ContactKeep","VelvetShellGrassV44"}){
      var material=Resources.Load<Material>("SeaAtmosphereV37/"+name);
      if(material==null||material.shader==null||ShaderUtil.ShaderHasError(material.shader))
       throw new InvalidOperationException("Invalid v37 atmosphere shader "+name);

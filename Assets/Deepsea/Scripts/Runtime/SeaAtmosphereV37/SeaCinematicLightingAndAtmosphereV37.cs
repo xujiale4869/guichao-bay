@@ -22,7 +22,7 @@ namespace Deepsea
     }
 
     [DefaultExecutionOrder(1200)]
-    public sealed class SeaCinematicLightingAndAtmosphereV37 : MonoBehaviour
+    public sealed partial class SeaCinematicLightingAndAtmosphereV37 : MonoBehaviour
     {
         internal static bool Enabled => true;
 
@@ -438,11 +438,10 @@ namespace Deepsea
 
         void BuildInlandSceneryV40()
         {
-            var shader = Shader.Find("Deepsea/V24CoastShowcaseSurface");
-            if (shader == null) return;
             inlandScenery = game.Group("V40 Inland Scenery",game.exterior,Vector3.zero);
             var exclusions = new List<Bounds>();
             var trees = new List<Vector3>();
+            MeshFilter harborWood = null;
             Transform mapleSource = null;
             foreach (var node in game.exterior.GetComponentsInChildren<Transform>())
             {
@@ -450,6 +449,8 @@ namespace Deepsea
                     exclusions.Add(new Bounds(node.position,new Vector3(8,200,8)));
                 else if (node.parent != null && node.parent.name == "V31_VillageStonePaths")
                     exclusions.Add(new Bounds(node.position,new Vector3(2.4f,200,2.4f)));
+                else if (node.name == "EN_Pier_Wood_04_LOD0")
+                    harborWood = node.GetComponent<MeshFilter>();
                 else if (node.name.StartsWith("V29_CoastMaple_",System.StringComparison.Ordinal))
                 {
                     trees.Add(node.position);
@@ -461,7 +462,7 @@ namespace Deepsea
             }
             exclusions.Add(new Bounds(new Vector3(-9,0,2.8f),new Vector3(8.4f,200,6.4f)));
             BuildUplandGrove(mapleSource,exclusions:exclusions,trees:trees);
-            BuildCoastalMeadow(shader,exclusions,trees);
+            BuildVelvetMeadowV44(exclusions,trees,harborWood);
 
             var stone = Resources.Load<Material>("CoastMaple/Limestone");
             var wallParts = new List<CombineInstance>();
@@ -564,15 +565,7 @@ namespace Deepsea
             var leafMaterial = leaves.GetComponent<MeshRenderer>().sharedMaterial;
             if (barkMesh == null || leafSource == null || barkMaterial == null || leafMaterial == null) return;
 
-            // Preserve complete authored leaf cards and use one third of them in the upland grove.
-            // The island's original feature trees retain their full canopies.
-            var leafMesh = Instantiate(leafSource);
-            var sourceIndices = leafSource.GetTriangles(0);
-            var leafIndices = new List<int>(sourceIndices.Length/3);
-            for (int first = 0; first+2 < sourceIndices.Length; first+=18)
-                for (int index = first; index < Mathf.Min(first+6,sourceIndices.Length); index++)
-                    leafIndices.Add(sourceIndices[index]);
-            leafMesh.SetTriangles(leafIndices,0);
+            var leafMesh = BuildFullerMapleCanopyV44(leafSource);
             v40Assets.Add(leafMesh);
 
             var random = new System.Random(43029);
@@ -641,124 +634,6 @@ namespace Deepsea
             float xRise = coast.GrassHeightAt(x+.35f,z)-coast.GrassHeightAt(x-.35f,z);
             float zRise = coast.GrassHeightAt(x,z+.35f)-coast.GrassHeightAt(x,z-.35f);
             return new Vector3(-xRise,.70f,-zRise).normalized;
-        }
-
-        void BuildCoastalMeadow(Shader shader, List<Bounds> exclusions, List<Vector3> trees)
-        {
-            const float spacing = .48f;
-            const float minimumWeight = .13f;
-            const float seaMargin = .45f;
-            var vertices = new List<Vector3>();
-            var normals = new List<Vector3>();
-            var colors = new List<Color32>();
-            var triangles = new List<int>();
-            var meadowRoot = new Color(.22f,.35f,.16f);
-            var meadowTip = new Color(.37f,.49f,.23f);
-            var duneRoot = new Color(.40f,.38f,.23f);
-            var duneTip = new Color(.55f,.51f,.30f);
-            var litter = new Color(.31f,.225f,.132f);
-            var moss = new Color(.27f,.37f,.18f);
-            int duneCells = 0, meadowCells = 0, groveCells = 0;
-            uint hash = 43;
-            float sea = SeaLifeRuntime.Sea;
-            var local = inlandScenery.worldToLocalMatrix;
-
-            void Vertex(Vector3 position, Vector3 normal, Color color)
-            {
-                vertices.Add(local.MultiplyPoint3x4(position));
-                normals.Add(normal);
-                colors.Add(color);
-            }
-
-            for (int row = 0; row <= 175; row++)
-            for (int column = 0; column <= 112; column++)
-            {
-                hash = unchecked(hash*1664525u+1013904223u);
-                float x = -48f+column*spacing+((hash & 255)/255f-.5f)*.24f;
-                float z = -42f+row*spacing+(((hash>>8) & 255)/255f-.5f)*.24f;
-                float y = coast.GrassHeightAt(x,z);
-                if (y < sea+seaMargin) continue;
-                var biome = coast.CoastBiomeAt(x,z,y);
-                float coverage = SeaSeamlessWorldAndNauticalUIV29.BiomeRamp(minimumWeight,.48f,biome.x);
-                var center = new Vector3(x,y,z);
-                if (coverage <= 0 || exclusions.Exists(bounds => bounds.Contains(center))) continue;
-                float gap = float.PositiveInfinity;
-                foreach (var tree in trees) gap = Mathf.Min(gap,HorizontalDistanceSquared(tree,center));
-                float forest = Mathf.Max(biome.y,(1-SeaSeamlessWorldAndNauticalUIV29.BiomeRamp(2,24,gap))*.85f);
-                float chance = ((hash>>16)&255)/255f;
-                if (gap < 1.35f || chance >= coverage*Mathf.Lerp(1,.56f,forest)) continue;
-                var normal = GrassNormal(x,z);
-                if (normal.y < .37f) continue;
-
-                float growth = SeaSeamlessWorldAndNauticalUIV29.BiomeRamp(minimumWeight,.75f,biome.x);
-                float dune = 1-SeaSeamlessWorldAndNauticalUIV29.BiomeRamp(minimumWeight,.65f,biome.x);
-                float phase = ((hash>>20) & 255)*(Mathf.PI*2/255);
-                Color rootColor = Color.Lerp(Color.Lerp(meadowRoot,duneRoot,dune),litter,forest);
-                rootColor.a = 0;
-                var forestTip = (hash & 7) == 0 ? new Color(.51f,.32f,.16f) : moss;
-                Color tipColor = Color.Lerp(Color.Lerp(meadowTip,duneTip,dune),forestTip,forest);
-                Color midColor = Color.Lerp(rootColor,tipColor,.46f);
-                midColor.a = .46f;
-                int blades = Mathf.RoundToInt(Mathf.Lerp(2,5,growth)*Mathf.Lerp(1,.66f,forest));
-                int start = vertices.Count;
-                for (int blade = 0; blade < blades; blade++)
-                {
-                    float angle = phase+blade*(Mathf.PI*2/blades);
-                    var heading = new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle));
-                    var side = new Vector3(-heading.z,0,heading.x);
-                    var foot = center+heading*Mathf.Lerp(.045f,.10f,growth);
-                    float height = Mathf.Lerp(.14f,.47f,growth)*Mathf.Lerp(1,.70f,forest) *
-                        (.87f+(blade%3)*.12f+((hash>>28)&7)*.014f);
-                    float lean = height*(.50f+(blade%2)*.18f);
-                    float halfWidth = Mathf.Lerp(.041f,.078f,growth);
-                    var left = foot-side*halfWidth;
-                    var right = foot+side*halfWidth;
-                    float leftHeight = coast.GrassHeightAt(left.x,left.z);
-                    float rightHeight = coast.GrassHeightAt(right.x,right.z);
-                    if (leftHeight < sea+seaMargin || rightHeight < sea+seaMargin ||
-                        coast.CoastBiomeAt(left.x,left.z,leftHeight).x <= minimumWeight ||
-                        coast.CoastBiomeAt(right.x,right.z,rightHeight).x <= minimumWeight ||
-                        exclusions.Exists(bounds => bounds.Contains(left) || bounds.Contains(right))) continue;
-
-                    left.y = leftHeight-.030f;
-                    right.y = rightHeight-.030f;
-                    foot.y = (left.y+right.y)*.5f;
-                    var middle = foot+heading*(lean*.43f)+Vector3.up*(height*.53f);
-                    var tip = foot+heading*lean+Vector3.up*height;
-                    int first = vertices.Count;
-                    Vertex(left,normal,rootColor);
-                    Vertex(right,normal,rootColor);
-                    Vertex(middle-side*(halfWidth*.68f),normal,midColor);
-                    Vertex(middle+side*(halfWidth*.68f),normal,midColor);
-                    Vertex(tip,normal,tipColor);
-                    triangles.Add(first); triangles.Add(first+2); triangles.Add(first+1);
-                    triangles.Add(first+1); triangles.Add(first+2); triangles.Add(first+3);
-                    triangles.Add(first+2); triangles.Add(first+4); triangles.Add(first+3);
-                }
-                if (vertices.Count == start) continue;
-                if (forest > .55f) groveCells++;
-                else if (dune > .50f) duneCells++;
-                else meadowCells++;
-            }
-
-            if (vertices.Count == 0) return;
-            var mesh = new Mesh { name = "V43 Natural Coastal Meadow", indexFormat = IndexFormat.UInt32 };
-            mesh.SetVertices(vertices);
-            mesh.SetNormals(normals);
-            mesh.SetColors(colors);
-            mesh.SetTriangles(triangles,0);
-            var bounds = mesh.bounds;
-            bounds.Expand(.50f);
-            mesh.bounds = bounds;
-            var material = new Material(shader) { name = "V43 Coastal Grass" };
-            material.SetFloat("_Mode",9f);
-            material.SetFloat("_Sway",.18f);
-            var owner = game.Group("V40_InlandWindMeadow",inlandScenery,Vector3.zero);
-            AddRenderer(owner.gameObject,mesh,material);
-            v40Assets.Add(mesh);
-            v40Assets.Add(material);
-            Debug.Log($"V43_BIOMES_READY dune={duneCells} meadow={meadowCells} grove={groveCells} " +
-                $"maples={UplandMapleCount} grassTriangles={triangles.Count/3} hiddenClutter={hiddenClutter.Count}");
         }
 
         static Mesh BuildFacetedStone(string name, bool shelf)

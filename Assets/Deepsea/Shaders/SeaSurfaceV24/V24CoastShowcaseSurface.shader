@@ -25,8 +25,8 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
     half4 _CoastMistV37;
     struct A{float4 p:POSITION;float3 n:NORMAL;float4 t:TANGENT;float2 uv:TEXCOORD0;half4 c:COLOR;UNITY_VERTEX_INPUT_INSTANCE_ID};
     struct V{float4 p:SV_POSITION;float3 w:TEXCOORD0;float3 n:TEXCOORD1;float4 t:TEXCOORD2;float2 uv:TEXCOORD3;half4 c:COLOR;UNITY_VERTEX_INPUT_INSTANCE_ID};
-    static const half3 MeadowRoot = half3(.22,.35,.16);
-    static const half3 ForestLitter = half3(.31,.225,.132);
+    static const half3 MeadowRoot = half3(.078,.166,.105);
+    static const half3 ForestLitter = half3(.085,.119,.105);
 
     half3 MeadowLight(float3 n, Light sun){
       half3 daylight=lerp(half3(.98,.94,.84),min(sun.color,1.45),.56);
@@ -161,7 +161,7 @@ Shader "Deepsea/V24CoastShowcaseSurface" {
           float slope=smoothstep(.37,.78,geom.y);
           float dryLand=smoothstep(-.42,.08,i.w.y);
           half3 goldenSand=lerp(half3(.53,.43,.30),sandSample,.46)*half3(1,.96,.89);
-          half3 loam=lerp(goldenSand,half3(.38,.36,.23),.72);
+          half3 loam=lerp(goldenSand,half3(.34,.44,.26),.62);
           float ecotone=smoothstep(.04,.36,grassWeight)*(1-smoothstep(.40,.80,grassWeight));
           sandV37=slope*(1-grassWeight);
           albedo=lerp(albedo,goldenSand,sandV37*dryLand);

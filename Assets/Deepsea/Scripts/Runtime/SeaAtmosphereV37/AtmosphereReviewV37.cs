@@ -19,7 +19,7 @@ namespace Deepsea
         }
 
         [Serializable]
-        sealed class SailingEvidenceV43
+        sealed class SailingEvidenceV44
         {
             public int frames;
             public float averageFps, p95FrameMs, boatTravelMeters, headingChangeDegrees;
@@ -121,7 +121,7 @@ namespace Deepsea
             game.GameplayV34.CycleWatch();
             game.GameplayV34.CycleWatch();
             yield return ReviewHullClearanceV401();
-            yield return ReviewCoastalBiomeV43(atmosphere);
+            yield return ReviewVelvetMeadowV44(atmosphere);
             game.SetWaterReviewAngleV35(oldAngle);
             File.WriteAllText(Path.Combine(evidence,"atmosphere-v37.json"),JsonUtility.ToJson(proof,true));
         }
@@ -161,14 +161,30 @@ namespace Deepsea
             customSailZoom = previousZoom;
         }
 
-        IEnumerator ReviewCoastalBiomeV43(SeaCinematicLightingAndAtmosphereV37 atmosphere)
+        IEnumerator ReviewVelvetMeadowV44(SeaCinematicLightingAndAtmosphereV37 atmosphere)
         {
             Transform carpet = game.exterior.Find("V40 Inland Scenery/V40_InlandWindMeadow");
             var renderer = carpet != null ? carpet.GetComponent<MeshRenderer>() : null;
-            Check(renderer != null && renderer.sharedMaterial.GetFloat("_Mode") == 9 &&
+            var grass = carpet != null ? carpet.GetComponent<MeshFilter>().sharedMesh : null;
+            var grassLayers = grass != null ? grass.uv : Array.Empty<Vector2>();
+            int samplesPerShell = grassLayers.Length / SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44;
+            int crimsonSamples = 0;
+            var grassColors = grass != null ? grass.colors32 : Array.Empty<Color32>();
+            for (int i = 0; i < samplesPerShell; i++)
+                if (grassColors[i].g >= 153) crimsonSamples++;
+
+            bool layered = samplesPerShell > 0 && grassLayers.Length % SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44 == 0;
+            for (int layer = 0; layered && layer < SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44; layer++)
+            {
+                float expected = 1f - layer / (SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44 - 1f);
+                layered &= Mathf.Abs(grassLayers[layer*samplesPerShell].x - expected) < .0001f;
+            }
+
+            Check(renderer != null && renderer.sharedMaterial.shader.name == "Deepsea/VelvetShellGrassV44" &&
+                  renderer.sharedMaterial.shader.isSupported &&
                   renderer.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off &&
-                  carpet.GetComponent<MeshFilter>().sharedMesh.subMeshCount == 1,
-                "v43 coastal grass shares one unshadowed draw mesh");
+                  grass.subMeshCount == 1 && layered && crimsonSamples > 100 && atmosphere.ProtectedWoodSamplesV44 > 0,
+                "v44 fourteen unshadowed grass shells include coherent crimson coverage and leave the wooden treads clear");
 
             var shelf = worldRoot.Find("V29_ContinuousContinentalShelf").GetComponent<MeshFilter>().sharedMesh;
             var colors = shelf.colors;
@@ -205,18 +221,18 @@ namespace Deepsea
                 atmosphere.PresentForReview(false);
                 Check(!carpet.gameObject.activeInHierarchy && atmosphere.ClutterVisibilityMatches(true),
                     "v43 baseline restores legacy shore plants and hides coastal grass and upland groves");
-                yield return Capture("v43-coast-baseline");
+                yield return Capture("v44-coast-baseline");
                 atmosphere.PresentForReview(true);
                 Check(carpet.gameObject.activeInHierarchy && atmosphere.ClutterVisibilityMatches(false),
                     "v43 presentation restores the new grass and upland groves and hides legacy shore clutter");
-                yield return Capture("v43-coast-biomes");
+                yield return Capture("v44-coast-panorama");
                 Time.timeScale = 1;
             }
 
-            var grove = new Vector3(-33f,GrassHeightAt(-33f,21f),21f);
-            yield return VillageFrameV31("v43-upland-grove",grove,12f,40,-57);
-            var profile = new Vector3(-24f,GrassHeightAt(-24f,8f),8f);
-            yield return VillageFrameV31("v43-headland-profile",profile,25f,32,-10);
+            var meadowView = new Vector3(-23f,GrassHeightAt(-23f,12f),12f);
+            yield return VillageFrameV31("v44-velvet-grass-wave",meadowView,9.5f,33,-65);
+            var grove = new Vector3(-31f,GrassHeightAt(-31f,21f),21f);
+            yield return VillageFrameV31("v44-crimson-carpet",grove,12.5f,37,-54);
 
             customSailZoom = 21.5f;
             game.PlaceBoat(new Vector3(11f,SeaLifeRuntime.Sea,-8.5f),350);
@@ -236,7 +252,7 @@ namespace Deepsea
             }
 
             Array.Sort(frameMs);
-            var proof = new SailingEvidenceV43
+            var proof = new SailingEvidenceV44
             {
                 frames = frameMs.Length,
                 averageFps = 1000 * frameMs.Length / totalMs,
@@ -245,9 +261,11 @@ namespace Deepsea
                 headingChangeDegrees = Mathf.Abs(Mathf.DeltaAngle(startHeading,game.boat.eulerAngles.y))
             };
             Check(proof.boatTravelMeters > 7 && proof.headingChangeDegrees > 3 && game.Speed > 1.1f,
-                "v43 performance sample includes actual propulsion, steering and a moving camera");
-            File.WriteAllText(Path.Combine(evidence,"sailing-v43.json"),JsonUtility.ToJson(proof,true));
-            yield return Capture("v43-sailing");
+                "v44 performance sample includes actual propulsion, steering and a moving camera");
+            Check(Screen.width == 1920 && Screen.height == 1080 && proof.averageFps >= 90,
+                "v44 moving 1080p camera averages at least 90 FPS");
+            File.WriteAllText(Path.Combine(evidence,"sailing-v44.json"),JsonUtility.ToJson(proof,true));
+            yield return Capture("v44-sailing");
             game.DriveInput = Vector2.zero;
             game.PlaceBoat(previous,previousHeading);
             customSailZoom = previousZoom;
