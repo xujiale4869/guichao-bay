@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -164,29 +165,26 @@ namespace Deepsea
         IEnumerator ReviewVelvetMeadowV44(SeaCinematicLightingAndAtmosphereV37 atmosphere)
         {
             Transform carpet = game.exterior.Find("V40 Inland Scenery/V40_InlandWindMeadow");
-            var renderer = carpet != null ? carpet.GetComponent<MeshRenderer>() : null;
-            var grass = carpet != null ? carpet.GetComponent<MeshFilter>().sharedMesh : null;
-            var grassLayers = grass != null ? grass.uv : Array.Empty<Vector2>();
-            int samplesPerShell = grassLayers.Length / SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44;
-            int goldenSamples = 0;
-            var grassColors = grass != null ? grass.colors32 : Array.Empty<Color32>();
-            for (int i = 0; i < samplesPerShell; i++)
-                if (grassColors[i].g >= 90) goldenSamples++;
-
-            bool layered = samplesPerShell > 0 && grassLayers.Length % SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44 == 0;
-            for (int layer = 0; layered && layer < SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44; layer++)
+            var inner = carpet != null ? carpet.Find("V44_InnerIslandWindMeadow") : null;
+            var outer = carpet != null ? carpet.Find("V44_OuterIslandWindMeadow") : null;
+            var innerRoots = new HashSet<Vector3>();
+            var outerRoots = new HashSet<Vector3>();
+            bool innerValid = ValidateVelvetTilesV442(atmosphere,inner,false,innerRoots,out int innerGold);
+            bool outerValid = ValidateVelvetTilesV442(atmosphere,outer,true,outerRoots,out int outerGold);
+            bool west = false, north = false, south = false;
+            int sharedRoots = 0;
+            foreach (var root in outerRoots)
             {
-                float expected = 1f - layer / (SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44 - 1f);
-                layered &= Mathf.Abs(grassLayers[layer*samplesPerShell].x - expected) < .0001f;
+                var world = outer.TransformPoint(root);
+                west |= world.x < -112f;
+                north |= world.z > 112f;
+                south |= world.z < -100f;
+                if (innerRoots.Contains(root)) sharedRoots++;
             }
-
-            Check(renderer != null && renderer.sharedMaterial.shader.name == "Deepsea/VelvetShellGrassV44" &&
-                  renderer.sharedMaterial.shader.isSupported &&
-                  renderer.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.Off &&
-                  grass.subMeshCount == 1 && layered && goldenSamples > 55 &&
-                  atmosphere.ProtectedWoodSamplesV44 > 0 &&
+            Check(innerValid && outerValid && west && north && south && sharedRoots > 20 &&
+                  innerGold+outerGold > 55 && atmosphere.ProtectedWoodSamplesV44 > 0 &&
                   Mathf.Abs(atmosphere.UplandLeafCardFractionV441-.85f) < .025f,
-                "v44.1 twelve grass shells include golden clearings, protected wooden treads and fuller crowns");
+                "v44.2 tiled inner and outer shells share root samples, reach all inland slopes and protect wooden treads");
 
             var shelf = worldRoot.Find("V29_ContinuousContinentalShelf").GetComponent<MeshFilter>().sharedMesh;
             var colors = shelf.colors;
@@ -203,7 +201,8 @@ namespace Deepsea
             }
             Check(shorePlants > 100 && meadow > 100 && undergrowth > 100 && dryBiomes,
                 "v43 terrain blends dune grass, meadow and upland leaf litter above the tidal zone");
-            Check(atmosphere.UplandMapleCount == 16,"v43 sixteen upland maples are planted using the existing maple meshes");
+            Check(atmosphere.UplandMapleCount == 16 && atmosphere.OuterMapleCountV442 == 10,
+                "v44.2 preserves sixteen upland maples and extends the grove with ten native maples");
 
             int climbingProfiles = 0;
             for (int z = -16; z <= 24; z+=4)
@@ -223,17 +222,23 @@ namespace Deepsea
                 atmosphere.PresentForReview(false);
                 Check(!carpet.gameObject.activeInHierarchy && atmosphere.ClutterVisibilityMatches(true),
                     "v43 baseline restores legacy shore plants and hides coastal grass and upland groves");
-                yield return Capture("v441-coast-baseline");
+                yield return Capture("v442-coast-baseline");
                 atmosphere.PresentForReview(true);
                 Check(carpet.gameObject.activeInHierarchy && atmosphere.ClutterVisibilityMatches(false),
                     "v43 presentation restores the new grass and upland groves and hides legacy shore clutter");
-                yield return Capture("v441-coast-panorama");
+                yield return Capture("v442-coast-panorama");
                 Time.timeScale = 1;
             }
 
+            bay.ToggleGodBuildMode(true);
+            bay.PlanningViewV29(new Vector3(-66f,SeaLifeRuntime.Sea,4f),95f);
+            yield return new WaitForSecondsRealtime(.65f);
+            yield return Capture("v442-island-planning");
+            bay.ToggleGodBuildMode(false);
+
             var meadowView = new Vector3(-23f,GrassHeightAt(-23f,12f),12f);
-            yield return VillageFrameV31("v441-velvet-grass-wave",meadowView,9.5f,33,-65);
-            yield return VillageFrameV31("v441-golden-meadow",atmosphere.GoldenMeadowFocusV441,8.7f,56,-53);
+            yield return VillageFrameV31("v442-velvet-grass-wave",meadowView,9.5f,33,-65);
+            yield return VillageFrameV31("v442-golden-meadow",atmosphere.GoldenMeadowFocusV441,8.7f,56,-53);
 
             customSailZoom = 21.5f;
             game.PlaceBoat(new Vector3(11f,SeaLifeRuntime.Sea,-8.5f),350);
@@ -264,12 +269,45 @@ namespace Deepsea
             Check(proof.boatTravelMeters > 7 && proof.headingChangeDegrees > 3 && game.Speed > 1.1f,
                 "v44.1 performance sample includes actual propulsion, steering and a moving camera");
             Check(Screen.width == 1920 && Screen.height == 1080 && proof.averageFps >= 90,
-                "v44.1 moving 1080p camera averages at least 90 FPS");
-            File.WriteAllText(Path.Combine(evidence,"sailing-v441.json"),JsonUtility.ToJson(proof,true));
-            yield return Capture("v441-sailing");
+                "v44.2 moving 1080p camera averages at least 90 FPS");
+            File.WriteAllText(Path.Combine(evidence,"sailing-v442.json"),JsonUtility.ToJson(proof,true));
+            yield return Capture("v442-sailing");
             game.DriveInput = Vector2.zero;
             game.PlaceBoat(previous,previousHeading);
             customSailZoom = previousZoom;
+        }
+
+        static bool ValidateVelvetTilesV442(SeaCinematicLightingAndAtmosphereV37 atmosphere,
+            Transform region, bool outer, HashSet<Vector3> roots, out int golden)
+        {
+            golden = 0;
+            if (region == null || region.childCount == 0) return false;
+            int innerLayers = SeaCinematicLightingAndAtmosphereV37.VelvetShellCountV44;
+            var outerLayers = SeaCinematicLightingAndAtmosphereV37.OuterVelvetLayersV442;
+            int count = outer ? outerLayers.Length : innerLayers;
+            foreach (Transform tile in region)
+            {
+                var renderer = tile.GetComponent<MeshRenderer>();
+                var mesh = atmosphere.FullGrassMeshV442(tile.GetComponent<MeshFilter>());
+                if (mesh == null || renderer == null || renderer.sharedMaterial.shader.name != "Deepsea/VelvetShellGrassV44" ||
+                    !renderer.sharedMaterial.shader.isSupported ||
+                    renderer.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.Off ||
+                    mesh.subMeshCount != 1 || mesh.vertexCount % count != 0) return false;
+
+                int length = mesh.vertexCount/count;
+                var uv = mesh.uv;
+                for (int layer = 0; layer < count; layer++)
+                {
+                    int shell = outer ? outerLayers[layer] : innerLayers-1-layer;
+                    if (Mathf.Abs(uv[layer*length].x-shell/(innerLayers-1f)) > .0001f) return false;
+                }
+                var positions = mesh.vertices;
+                var colors = mesh.colors32;
+                for (int i = 0; i < length; i++)
+                    if (colors[i].r > 10 && roots.Add(positions[i]) && colors[i].g >= 90)
+                        golden++;
+            }
+            return true;
         }
 
         bool FloatingSupportsClearV401(SeaLifeNavigationV23 navigation, Transform visual)

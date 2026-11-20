@@ -608,6 +608,8 @@ namespace Deepsea
                 AddInlandBatch("V43 Upland Maple Bark "+tile,barkParts[tile],barkMaterial);
                 AddInlandBatch("V43 Upland Maple Leaves "+tile,leafParts[tile],leafMaterial);
             }
+            BuildOuterMaplesV442(trees,exclusions,barkMesh,leafMesh,barkMaterial,leafMaterial,
+                shadowVertices,shadowUv,shadowIndices,shadowColors);
             var contact = Resources.Load<Material>("SeaAtmosphereV37/ContactKeep");
             if (contact != null && shadowVertices.Count > 0)
             {
@@ -619,6 +621,44 @@ namespace Deepsea
                 var owner = game.Group("V43 Grove Contact Shadows",inlandScenery,Vector3.zero);
                 AddRenderer(owner.gameObject,shadows,contact);
                 v40Assets.Add(shadows);
+            }
+        }
+
+        void BuildOuterMaplesV442(List<Vector3> trees, List<Bounds> exclusions,
+            Mesh bark, Mesh leaves, Material barkMaterial, Material leafMaterial,
+            List<Vector3> shadowVertices, List<Vector2> shadowUv, List<int> shadowIndices, List<Color32> shadowColors)
+        {
+            var points = new[]
+            {
+                new Vector2(-28,38), new Vector2(-36.5f,46), new Vector2(-22,52),
+                new Vector2(-48,26), new Vector2(-54,8), new Vector2(-52,-12),
+                new Vector2(-46,-32), new Vector2(-34,-38), new Vector2(-58,36), new Vector2(-60,-24)
+            };
+            for (int i = 0; i < points.Length; i++)
+            {
+                for (int attempt = 0; attempt < 65; attempt++)
+                {
+                    float angle = (attempt+i)*2.399963f;
+                    float radius = Mathf.Sqrt(attempt)*1.45f;
+                    var candidate = points[i]+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*radius;
+                    float x = candidate.x, z = candidate.y;
+                    float height = coast.GrassHeightAt(x,z);
+                    var root = new Vector3(x,height-.13f,z);
+                    if (coast.CoastBiomeAt(x,z,height).y < .37f || GrassNormal(x,z).y < .80f ||
+                        exclusions.Exists(box => box.Contains(root)) ||
+                        trees.Exists(tree => HorizontalDistanceSquared(tree,root) < 36f)) continue;
+
+                    float scale = .87f+.05f*((i*7)%6);
+                    var maple = game.Group("V44_OuterMaple_"+i.ToString("00"),inlandScenery,Vector3.zero);
+                    maple.SetPositionAndRotation(root,Quaternion.Euler(0,i*137.5f,0));
+                    maple.localScale = Vector3.one*scale;
+                    AddRenderer(game.Group("Bark",maple,Vector3.zero).gameObject,bark,barkMaterial);
+                    AddRenderer(game.Group("Leaves",maple,Vector3.zero).gameObject,leaves,leafMaterial);
+                    trees.Add(root);
+                    AddGroundPatch(root,2.5f*scale,shadowVertices,shadowUv,shadowIndices,shadowColors,true);
+                    OuterMapleCountV442++;
+                    break;
+                }
             }
         }
 
@@ -736,6 +776,7 @@ namespace Deepsea
             if (focusActive) RefreshFocus(focus);
             else focusCurrent = false;
             RefreshV40Presentation(outdoors);
+            if (outdoors) RefreshVelvetMeshesV442();
 
             int watch = game.GameplayV34.State.watch;
             bool lightChanged = presented && game.InRoom != previousInRoom;

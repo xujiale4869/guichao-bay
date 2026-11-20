@@ -47,7 +47,7 @@ Shader "Deepsea/VelvetShellGrassV44"
             float3 position : POSITION;
             float3 normal : NORMAL;
             float2 shell : TEXCOORD0;
-            half3 biome : COLOR;
+            half4 biome : COLOR;
         };
 
         struct Varyings
@@ -57,7 +57,7 @@ Shader "Deepsea/VelvetShellGrassV44"
             half3 normalWS : TEXCOORD1;
             float2 rootXZ : TEXCOORD2;
             half4 shell : TEXCOORD3;
-            half2 shade : TEXCOORD4;
+            half3 shade : TEXCOORD4;
             #if defined(SHADER_API_D3D11)
                 float shellVisibility : SV_ClipDistance0;
             #else
@@ -118,9 +118,12 @@ Shader "Deepsea/VelvetShellGrassV44"
             float pixels = _ScaledScreenParams.y * abs(UNITY_MATRIX_P._m11) * .5 * _ShellThickness / viewDepth;
             float layer = round(shellH*11);
             float minimumPixels = layer == 6 ? 0 : layer == 3 || layer == 9 ? 18 : 22;
-            output.shellVisibility = pixels-minimumPixels;
+            bool extraShell = layer == 1 || layer == 4 || layer == 7 || layer == 10;
+            float seam = extraShell ? input.biome.a : 1;
+            output.shellVisibility = min(pixels-minimumPixels,seam*32-.015);
             float detail = smoothstep(16,23,pixels);
-            taper *= lerp(.45,1,detail);
+            float distanceFade = smoothstep(65,125,length(_WorldSpaceCameraPos-rootWS));
+            taper *= lerp(lerp(1,.62,distanceFade),1,detail);
 
             float3 flow = 0;
             #if defined(SHADER_API_D3D11)
@@ -139,7 +142,7 @@ Shader "Deepsea/VelvetShellGrassV44"
             output.normalWS = normalWS + float3(wind.x,0,wind.y)*(.92*shellH);
             output.rootXZ = rootXZ;
             output.shell = half4(shellH, input.biome.r, input.biome.g, input.biome.b);
-            output.shade = half2(flow.z,1-detail);
+            output.shade = half3(flow.z,1-detail,seam);
             return output;
         }
 
@@ -163,16 +166,18 @@ Shader "Deepsea/VelvetShellGrassV44"
             #endif
             clip(coverage - .04);
             float2 coords = input.rootXZ * _StrandDensity;
+            if (input.shade.z < .88)
+            {
+                float transition = StrandNoise(floor(coords)+27.5).z;
+                clip(input.shade.z-lerp(.10,.88,transition));
+            }
 
             [branch] if (input.shade.y > .70 && abs(height-6.0/11.0) < .016)
             {
-                if (coverage < .26)
-                {
-                    float grain = StrandNoise(floor(coords)).z;
-                    clip(coverage - lerp(.045,.26,grain));
-                }
+                float grain = StrandNoise(floor(input.rootXZ * 3.8)).z;
+                clip(coverage - lerp(.045,.26,grain));
                 float2 p = input.rootXZ*float2(1.65,1.18);
-                return .5 + .24*sin(p.x+1.7*cos(p.y*.83)) + .19*cos(1.2*p.y-.57*p.x);
+                return .5 + .21*sin(p.x+1.7*cos(p.y*.83)) + .15*cos(1.2*p.y-.57*p.x) + .18*(grain-.5);
             }
 
             coords += .21*sin(coords.yx*float2(.27,.23)+float2(.5,1.7));
