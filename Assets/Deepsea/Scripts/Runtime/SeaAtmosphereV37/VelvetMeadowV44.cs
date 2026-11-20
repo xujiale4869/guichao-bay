@@ -7,11 +7,13 @@ namespace Deepsea
 {
     public sealed partial class SeaCinematicLightingAndAtmosphereV37
     {
-        internal const int VelvetShellCountV44 = 14;
+        internal const int VelvetShellCountV44 = 12;
         const float MeadowMinX = -48f, MeadowMinZ = -42f, MeadowStep = .72f;
         const int MeadowColumns = 76, MeadowRows = 118;
 
         internal int ProtectedWoodSamplesV44 { get; private set; }
+        internal Vector3 GoldenMeadowFocusV441 { get; private set; }
+        internal float UplandLeafCardFractionV441 { get; private set; }
 
         void BuildVelvetMeadowV44(List<Bounds> exclusions, List<Vector3> trees, MeshFilter harborWood)
         {
@@ -29,6 +31,7 @@ namespace Deepsea
             var biomes = new Color32[wood.Length];
             var growth = new float[wood.Length];
             int grassSamples = 0, flowerSamples = 0;
+            float bestFlowerWeight = 0;
             float sea = SeaLifeRuntime.Sea;
             for (int row = 0; row < MeadowRows; row++)
             for (int column = 0; column < MeadowColumns; column++)
@@ -43,7 +46,7 @@ namespace Deepsea
                 normals[index] = Vector3.up;
                 if (y < sea+.45f || y > sea+18.5f) continue;
                 var biome = coast.CoastBiomeAt(x,z,y);
-                if (biome.x < .07f) continue;
+                if (biome.x < .04f) continue;
                 if (wood[index])
                 {
                     ProtectedWoodSamplesV44++;
@@ -61,20 +64,35 @@ namespace Deepsea
 
                 float edge = Mathf.Min(Mathf.Min(column,MeadowColumns-1-column),
                     Mathf.Min(row,MeadowRows-1-row))*MeadowStep;
-                float grass = biome.x * BiomeRamp(.50f,.78f,normal.y) * BiomeRamp(.10f,1.30f,nearestTree) *
-                              (1-BiomeRamp(.12f,.60f,rockRelief)) * BiomeRamp(0,3.2f,edge);
-                if (grass < .09f) continue;
+                float grass = biome.x * BiomeRamp(.22f,.60f,normal.y) * BiomeRamp(.07f,1.10f,nearestTree) *
+                              (1-BiomeRamp(.18f,.67f,rockRelief)) * BiomeRamp(0,3.2f,edge);
+                if (grass < .04f) continue;
                 float forest = Mathf.Max(biome.y*.75f,(1-BiomeRamp(2,34,nearestTree))*.85f);
-                float band = .5f+.32f*Mathf.Sin(x*.11f+z*.085f+Mathf.Sin(z*.06f)*1.4f) +
-                             .18f*Mathf.Cos(z*.14f-x*.09f);
-                float grove = 1-BiomeRamp(4,52,nearestTree);
-                float crimson = BiomeRamp(.38f,.85f,grass) * BiomeRamp(sea+1.55f,sea+3.40f,y) *
-                                BiomeRamp(.46f,.72f,band+grove*.24f);
-                float height = .86f+.24f*Mathf.Sin(x*.23f-z*.19f)+crimson*.12f;
+                float band = .5f+.34f*Mathf.Sin(x*.12f-z*.095f+.8f) +
+                             .16f*Mathf.Cos(z*.15f+x*.08f);
+                float clearing = BiomeRamp(28,50,nearestTree) * (1-.35f*BiomeRamp(.60f,.98f,biome.y));
+                float gold = clearing * BiomeRamp(.22f,.69f,grass) * BiomeRamp(.13f,.53f,band) *
+                             BiomeRamp(sea+1.4f,sea+2.8f,y);
+                float height = .88f+.24f*Mathf.Sin(x*.21f-z*.18f)+gold*.08f;
                 grassSamples++;
-                if (crimson > .60f) flowerSamples++;
-                growth[index] = Mathf.Clamp(height,.65f,1.18f);
-                biomes[index] = new Color(grass,crimson,forest,1);
+                if (gold > .35f) flowerSamples++;
+                float viewWeight = gold * BiomeRamp(1.4f,4.4f,edge);
+                if (viewWeight > bestFlowerWeight)
+                {
+                    // Prefer a patch that is visible from above the slope and away from roofs.
+                    float structureGap = float.PositiveInfinity;
+                    foreach (var box in exclusions)
+                        if (box.size.x >= 5f)
+                            structureGap = Mathf.Min(structureGap,box.SqrDistance(root));
+                    viewWeight *= BiomeRamp(4,36,structureGap);
+                }
+                if (viewWeight > bestFlowerWeight)
+                {
+                    bestFlowerWeight = viewWeight;
+                    GoldenMeadowFocusV441 = root;
+                }
+                growth[index] = Mathf.Clamp(height,.68f,1.18f);
+                biomes[index] = new Color(grass,gold,forest,1);
             }
 
             // The two triangles of a cell share the same terrain samples as their neighbours.
@@ -127,7 +145,7 @@ namespace Deepsea
                     triangles[layer*baseTriangles.Count+i] = first+baseTriangles[i];
             }
 
-            var mesh = new Mesh { name = "V44 Velvet Grass Shells", indexFormat = IndexFormat.UInt32 };
+            var mesh = new Mesh { name = "V44.1 Silky Velvet Grass Shells", indexFormat = IndexFormat.UInt32 };
             mesh.vertices = positions;
             mesh.normals = meshNormals;
             mesh.uv = layers;
@@ -140,7 +158,7 @@ namespace Deepsea
 
             var owner = game.Group("V40_InlandWindMeadow",inlandScenery,Vector3.zero);
             AddRenderer(owner.gameObject,mesh,material);
-            Debug.Log($"V44_MEADOW_READY shells={VelvetShellCountV44} grass={grassSamples} crimson={flowerSamples} " +
+            Debug.Log($"V441_MEADOW_READY shells={VelvetShellCountV44} grass={grassSamples} gold={flowerSamples} " +
                       $"stairSamples={ProtectedWoodSamplesV44} triangles={triangles.Length/3}");
         }
 
@@ -172,17 +190,18 @@ namespace Deepsea
             }
         }
 
-        static Mesh BuildFullerMapleCanopyV44(Mesh source)
+        Mesh BuildFullerMapleCanopyV44(Mesh source)
         {
             var mesh = Instantiate(source);
             var vertices = source.vertices;
             var indices = source.GetTriangles(0);
-            var kept = new List<int>(indices.Length*2/3);
+            var kept = new List<int>(Mathf.CeilToInt(indices.Length*.85f));
             var corners = new int[6];
 
             for (int first = 0; first < indices.Length; first += 6)
             {
-                if ((first/6)%3 == 2) continue;
+                int card = first/6;
+                if ((card*3)%20 < 3) continue;
                 int count = 0;
                 var center = Vector3.zero;
                 for (int i = first; i < Mathf.Min(first+6,indices.Length); i++)
@@ -195,11 +214,12 @@ namespace Deepsea
                 }
                 center /= count;
                 for (int i = 0; i < count; i++)
-                    vertices[corners[i]] = center+(vertices[corners[i]]-center)*1.18f;
+                    vertices[corners[i]] = center+(vertices[corners[i]]-center)*1.22f;
             }
 
             mesh.vertices = vertices;
             mesh.SetTriangles(kept,0);
+            UplandLeafCardFractionV441 = (float)kept.Count/indices.Length;
             return mesh;
         }
     }

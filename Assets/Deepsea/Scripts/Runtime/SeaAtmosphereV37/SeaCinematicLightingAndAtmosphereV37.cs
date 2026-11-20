@@ -446,9 +446,9 @@ namespace Deepsea
             foreach (var node in game.exterior.GetComponentsInChildren<Transform>())
             {
                 if (node.name.StartsWith("V31_NPC_House_",System.StringComparison.Ordinal))
-                    exclusions.Add(new Bounds(node.position,new Vector3(8,200,8)));
+                    exclusions.Add(new Bounds(node.position,new Vector3(5.4f,200,5.4f)));
                 else if (node.parent != null && node.parent.name == "V31_VillageStonePaths")
-                    exclusions.Add(new Bounds(node.position,new Vector3(2.4f,200,2.4f)));
+                    exclusions.Add(new Bounds(node.position,new Vector3(1.45f,200,1.45f)));
                 else if (node.name == "EN_Pier_Wood_04_LOD0")
                     harborWood = node.GetComponent<MeshFilter>();
                 else if (node.name.StartsWith("V29_CoastMaple_",System.StringComparison.Ordinal))
