@@ -81,6 +81,8 @@ Shader "Deepsea/VelvetShellGrassV44"
             float layer = round(shellH*13);
             float minimumPixels = layer == 8 ? 0 : layer == 4 || layer == 11 ? 18 : 22;
             output.shellVisibility = pixels-minimumPixels;
+            float detail = smoothstep(16,23,pixels);
+            taper *= lerp(.45,1,detail);
 
             float time = _Time.y * _WindSpeed;
             const float2 windDir = float2(.84,.54);
@@ -103,7 +105,7 @@ Shader "Deepsea/VelvetShellGrassV44"
             output.normalWS = normalWS;
             output.rootXZ = rootXZ;
             output.shell = half4(shellH, input.biome.r, input.biome.g, input.biome.b);
-            output.shade = half2(.5 + .5 * sin(phase + .65),1-smoothstep(16,23,pixels));
+            output.shade = half2(.5 + .5 * sin(phase + .65),1-detail);
             return output;
         }
 
@@ -124,9 +126,14 @@ Shader "Deepsea/VelvetShellGrassV44"
             clip(coverage - .09);
             [branch] if (input.shade.y > .88 && abs(height-8.0/13.0) < .016)
             {
-                float patch = .5 + .5*sin(dot(input.rootXZ,float2(6.2,8.1)));
-                clip(coverage - lerp(.11,.25,patch));
-                return patch;
+                // Keep distant colour changes broad while the edge follows the local grain.
+                if (coverage < .31)
+                {
+                    float grain = StrandNoise(floor(input.rootXZ * _StrandDensity)).z;
+                    clip(coverage - lerp(.10,.31,grain));
+                }
+                float2 p = input.rootXZ*float2(1.65,1.18);
+                return .5 + .24*sin(p.x + 1.7*cos(p.y*.83)) + .19*cos(1.2*p.y-.57*p.x);
             }
 
             // Break up the grid and pin its pattern to the undeformed roots.
@@ -153,7 +160,7 @@ Shader "Deepsea/VelvetShellGrassV44"
             half crimson = input.shell.z;
             half forest = input.shell.w;
             half3 green = lerp(_GrassRootCol.rgb, _GrassMidCol.rgb, smoothstep(0,.58,height));
-            green *= lerp(1,lerp(.82,1.09,variation),input.shade.y);
+            green *= lerp(1,lerp(.92,1.06,variation),input.shade.y);
             green = lerp(green, _GrassTipCol.rgb, smoothstep(.42,1,height));
             green = lerp(green, _SandGrassCol.rgb * lerp(.62,1.05,height), (1-smoothstep(.10,.48,coverage))*.72);
 

@@ -8,15 +8,15 @@ V44 候选版的 Windows 可执行文件另存为 Builds/SeaAtmosphereV37-v44-ca
 
 ## 1080p Windows 验收
 
-Intel(R) Arc(TM) 130T GPU (16GB)。动态航行预热 60 帧，采样 480 帧，行驶 27.6 米并转向 44.8°。帧率对应本次指定路线和机位。
+Intel(R) Arc(TM) 130T GPU (16GB)。动态航行预热 60 帧，采样 480 帧，行驶 27.3 米并转向 44.8°。帧率对应本次指定路线和机位。
 
 | 场景 | 平均帧率 | P95 帧时间 |
 | --- | ---: | ---: |
-| 动态航行 | 82.74 FPS | 17.39 ms |
-| 航行机位短测 | 73.32 FPS | 19.65 ms |
-| 建造机位短测 | 74.99 FPS | 19.56 ms |
+| 动态航行 | 82.35 FPS | 19.24 ms |
+| 航行机位短测 | 76.59 FPS | 17.87 ms |
+| 建造机位短测 | 77.49 FPS | 18.48 ms |
 
-315 项原有检查通过，新增的 90 FPS 动态航行指标未通过。同次 Windows v43 对照动态航行为 82.41 FPS。本机使用 Rebuild-Atmosphere.ps1 -DisableBurst 构建，构建报告记录 25 项警告。
+315 项原有检查通过，新增的 90 FPS 动态航行指标未通过。同次 Windows v43 对照动态航行为 82.41 FPS。本机使用 Rebuild-Atmosphere.ps1 -DisableBurst 构建，构建报告记录 26 项警告。
 
 [验收报告](result.json) · [动态航行数据](sailing-v44.json) · [光照数据](atmosphere-result.json) · [v43 验收记录](https://github.com/xujiale4869/guichao-bay/tree/5a5d4d73ebcb5b42bfef04af771b3f4908b73e0b/Docs/SeaAtmosphereV37)
 

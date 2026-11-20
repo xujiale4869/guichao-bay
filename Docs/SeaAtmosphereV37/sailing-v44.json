@@ -1,7 +1,7 @@
 {
     "frames": 480,
-    "averageFps": 82.74471282958985,
-    "p95FrameMs": 17.391000747680665,
-    "boatTravelMeters": 27.588584899902345,
-    "headingChangeDegrees": 44.8006591796875
+    "averageFps": 82.35409545898438,
+    "p95FrameMs": 19.236900329589845,
+    "boatTravelMeters": 27.3310604095459,
+    "headingChangeDegrees": 44.780029296875
 }
