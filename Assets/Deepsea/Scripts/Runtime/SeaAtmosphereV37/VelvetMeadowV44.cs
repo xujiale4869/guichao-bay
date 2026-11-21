@@ -65,9 +65,9 @@ namespace Deepsea
 
             velvetThicknessV442 = material.GetFloat("_ShellThickness");
 
-            // Extend to the terrain's submerged west, north and south margins. All grass
-            // above the tidal band lies west of +18 m, including the authored shore.
-            var whole = new RectInt(0,0,CoarseIndex(18,MeadowMinX,true),CoarseIndex(175,MeadowMinZ,true));
+            // Include the authored eastern shore up to +48 m. The biome mask keeps
+            // sand and open water out of the grass patches.
+            var whole = new RectInt(0,0,CoarseIndex(48,MeadowMinX,true),CoarseIndex(175,MeadowMinZ,true));
             int left = CoarseIndex(-64,MeadowMinX,false), bottom = CoarseIndex(-64,MeadowMinZ,false);
             var core = new RectInt(left,bottom,CoarseIndex(14,MeadowMinX,true)-left,
                                    CoarseIndex(68,MeadowMinZ,true)-bottom);
@@ -126,8 +126,24 @@ namespace Deepsea
             sample.root = inlandScenery.InverseTransformPoint(root);
             sample.normal = Vector3.up;
             float sea = SeaLifeRuntime.Sea;
-            if (y < sea+.45f) return index;
-            var biome = coast.CoastBiomeAt(x,z,y);
+            if (y < sea+.24f) return index;
+
+            float visibleY = coast.GrassHeightAt(x,z);
+            float rockRelief = visibleY-y;
+            // Low rises follow the rendered surface. Extend onto low, gentle
+            // shoulders and taper off before larger or steeper rocks.
+            float raisedShoulder = 0;
+            if (rockRelief > .60f && rockRelief < 1.45f)
+            {
+                var visibleNormal = GrassNormal(x,z);
+                raisedShoulder = BiomeRamp(.72f,.92f,visibleNormal.y) *
+                                 (1-BiomeRamp(.92f,1.45f,rockRelief));
+            }
+            float followVisible = 1-BiomeRamp(.60f,1.10f,rockRelief)*(1-raisedShoulder);
+            float groundY = Mathf.Lerp(y,visibleY,followVisible);
+            root.y = groundY+.008f;
+            sample.root = inlandScenery.InverseTransformPoint(root);
+            var biome = coast.CoastBiomeAt(x,z,groundY);
             if (biome.x < .04f) return index;
             if (grid.wood[index])
             {
@@ -145,17 +161,18 @@ namespace Deepsea
             foreach (var tree in trees)
                 nearestTree = Mathf.Min(nearestTree,HorizontalDistanceSquared(tree,root));
 
-            float rockRelief = coast.GrassHeightAt(x,z)-y;
-            float grass = biome.x * BiomeRamp(.22f,.60f,normal.y) * BiomeRamp(.07f,1.10f,nearestTree) *
-                          (1-BiomeRamp(.18f,.67f,rockRelief));
+            float rockClearance = 1-BiomeRamp(.55f,1.45f,rockRelief)*(1-raisedShoulder);
+            float grass = biome.x * BiomeRamp(.16f,.46f,normal.y) * BiomeRamp(.07f,.95f,nearestTree) * rockClearance;
             if (grass < .04f) return index;
 
             float forest = Mathf.Max(biome.y*.75f,(1-BiomeRamp(2,34,nearestTree))*.85f);
             float band = .5f+.34f*Mathf.Sin(x*.12f-z*.095f+.8f)+.16f*Mathf.Cos(z*.15f+x*.08f);
             float clearing = BiomeRamp(28,50,nearestTree) * (1-.35f*BiomeRamp(.60f,.98f,biome.y));
             float villageDistance = HorizontalDistanceSquared(root,new Vector3(-31,0,1));
+            // At the shore, introduced grass joins the existing green dune cover.
             float gold = clearing * BiomeRamp(.22f,.69f,grass) * BiomeRamp(.13f,.53f,band) *
-                         BiomeRamp(sea+1.4f,sea+2.8f,y) * (1-BiomeRamp(2704,10700,villageDistance));
+                         BiomeRamp(sea+1.4f,sea+2.8f,y) * (1-BiomeRamp(2704,10700,villageDistance)) *
+                         (1-BiomeRamp(.28f,.70f,rockRelief));
             sample.growth = Mathf.Clamp(.88f+.24f*Mathf.Sin(x*.21f-z*.18f)+gold*.08f,.68f,1.18f);
             int seamDistance = Mathf.Min(Mathf.Min(ix-grid.core.xMin,grid.core.xMax-ix),
                                          Mathf.Min(iz-grid.core.yMin,grid.core.yMax-iz));
